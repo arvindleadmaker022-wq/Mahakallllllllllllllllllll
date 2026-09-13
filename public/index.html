@@ -1,283 +1,158 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure Mail Console</title>
-    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        :root {
-            --primary: #4f46e5;
-            --primary-hover: #4338ca;
-            --bg-color: #0f172a;
-            --card-bg: #1e293b;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border-color: #334155;
-            --danger: #ef4444;
-            --success: #22c55e;
-        }
-
-        body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
-            margin: 0;
-            padding: 0;
-            min-height: 100vh;
-        }
-
-        .password-gate {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            padding: 1rem;
-        }
-
-        .gate-card, .card {
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 2rem;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
-        }
-
-        .gate-card {
-            width: 100%;
-            max-width: 400px;
-            text-align: center;
-        }
-
-        .app-container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 2rem 1rem;
-        }
-
-        .app-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 2rem;
-            border-bottom: 1px solid var(--border-color);
-            padding-bottom: 1rem;
-        }
-
-        .app-header h1 {
-            font-size: 1.5rem;
-            margin: 0;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            color: #818cf8;
-        }
-
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 2rem;
-        }
-
-        @media (max-width: 968px) {
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        h2 {
-            font-size: 1.25rem;
-            margin-top: 0;
-            margin-bottom: 1.5rem;
-            color: var(--text-main);
-            border-left: 4px solid var(--primary);
-            padding-left: 0.5rem;
-        }
-
-        .form-group {
-            margin-bottom: 1.25rem;
-        }
-
-        label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-            color: var(--text-muted);
-        }
-
-        input[type="text"],
-        input[type="email"],
-        input[type="password"],
-        textarea {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            background-color: #0f172a;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            color: var(--text-main);
-            font-size: 0.95rem;
-            box-sizing: border-box;
-            transition: border-color 0.2s;
-        }
-
-        input:focus, textarea:focus {
-            outline: none;
-            border-color: var(--primary);
-        }
-
-        textarea {
-            resize: vertical;
-            min-height: 120px;
-        }
-
-        #message-body {
-            min-height: 160px;
-        }
-
-        .btn {
-            padding: 0.75rem 1.5rem;
-            border: none;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: background-color 0.2s, transform 0.1s;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-        }
-
-        .btn-primary {
-            background-color: var(--primary);
-            color: white;
-            width: 100%;
-        }
-
-        .btn-primary:hover {
-            background-color: var(--primary-hover);
-        }
-
-        .btn-danger {
-            background-color: var(--danger);
-            color: white;
-        }
-
-        .btn-danger:hover {
-            background-color: #dc2626;
-        }
-
-        .stat-box {
-            background-color: #0f172a;
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-            padding: 1rem;
-            text-align: center;
-        }
-
-        .stat-label {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .stat-value {
-            font-size: 1.5rem;
-            font-weight: bold;
-            margin-top: 0.25rem;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        .gate-error {
-            color: var(--danger);
-            font-size: 0.875rem;
-            margin-bottom: 1rem;
-        }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
+    <!-- Password Gate Overlay -->
     <div id="password-gate" class="password-gate">
-        <div class="gate-card">
-            <h2><i class="fa-solid fa-shield-halved"></i> Access Console</h2>
-            <p style="color: var(--text-muted); font-size: 0.9rem;">Enter your system password to continue</p>
-            <form id="gate-form">
-                <div id="gate-error" class="gate-error hidden">Incorrect Password</div>
-                <div class="form-group" style="margin-top: 1rem;">
-                    <input type="password" id="gate-password" placeholder="System Password" required>
+        <div class="gate-card fade-in">
+            <div class="gate-icon">
+                <i class="fa-solid fa-lock"></i>
+            </div>
+            <h2>Access Protected</h2>
+            <p>Enter password to continue</p>
+            <form id="gate-form" autocomplete="off">
+                <div class="form-group">
+                    <div class="password-wrapper">
+                        <input type="password" id="gate-password" placeholder="Enter password..." autocomplete="off" required>
+                        <button type="button" id="toggle-gate-password" class="icon-button"><i class="fa-regular fa-eye"></i></button>
+                    </div>
                 </div>
-                <button type="submit" id="gate-submit-btn" class="btn btn-primary">Enter Console</button>
+                <div id="gate-error" class="gate-error hidden">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span id="gate-error-text">Incorrect password</span>
+                </div>
+                <button type="submit" id="gate-submit-btn" class="btn btn-primary btn-block">
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Enter Console
+                </button>
             </form>
         </div>
     </div>
 
-    <div id="main-app" class="app-container hidden">
+    <div class="app-container hidden" id="main-app">
         <header class="app-header">
-            <h1><i class="fa-solid fa-terminal"></i> Secure Mail Console Pro</h1>
-            <button id="logout-btn" class="btn btn-danger" style="padding: 0.5rem 1rem; font-size: 0.875rem;"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
+            <h1><i class="fa-solid fa-shield-halved"></i> Secure Mail Console</h1>
+            <button type="button" id="logout-btn" class="btn-logout" title="Double click to logout">
+                <i class="fa-solid fa-right-from-bracket"></i> Logout (Double Click)
+            </button>
         </header>
 
-        <div class="dashboard-grid">
-            <!-- Left Side: Custom Configuration & Message Composer -->
-            <div class="card">
-                <h2><i class="fa-solid fa-pen-nib"></i> Email Composer</h2>
-                <form id="composer-form">
-                    <div class="form-group">
-                        <label>Sender Name</label>
-                        <input type="text" id="sender-name" placeholder="John Doe" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Sender Gmail</label>
-                        <input type="email" id="dashboard-email" placeholder="your-email@gmail.com" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Gmail App Password (16 chars)</label>
-                        <input type="password" id="dashboard-password" placeholder="xxxx xxxx xxxx xxxx" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Subject</label>
-                        <input type="text" id="subject" placeholder="Your Subject Line / Spintax Supported" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Message Body</label>
-                        <textarea id="message-body" placeholder="Hello {Name}, write your message here..." required></textarea>
-                    </div>
-                </form>
+        <section id="dashboard-section">
+            <div class="dashboard-header fade-in">
+                <h2><i class="fa-solid fa-paper-plane"></i> Bulk Email Sender (Batch Size: 2)</h2>
             </div>
 
-            <!-- Right Side: Recipients List & Execution Controls -->
-            <div class="card">
-                <h2><i class="fa-solid fa-address-book"></i> Recipients & Control</h2>
-                <div class="form-group">
-                    <label>Recipients List (<span id="detected-count" style="color: #818cf8;">0 found</span>)</label>
-                    <textarea id="recipients-input" placeholder="Paste emails here (one per line or formatted)" style="min-height: 180px;"></textarea>
-                    <div id="email-validation-error" class="hidden" style="color: var(--danger); font-size: 0.8rem; margin-top: 0.25rem;">No valid emails found</div>
+            <div class="dashboard-grid">
+                <!-- Composer Card -->
+                <div class="card composer-card fade-in delay-1">
+                    <h3><i class="fa-solid fa-pen-to-square"></i> Compose Message</h3>
+                    <form id="compose-form" onsubmit="return false;">
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label for="sender-name">Sender Name</label>
+                                <input type="text" id="sender-name" placeholder="E.g., John Doe" required>
+                            </div>
+                            <div class="form-group half">
+                                <label for="dashboard-email">Your Gmail</label>
+                                <input type="email" id="dashboard-email" placeholder="you@gmail.com" required>
+                            </div>
+                        </div>
+
+                        <div class="form-row">
+                            <div class="form-group half">
+                                <label for="dashboard-password">App Password</label>
+                                <div class="password-wrapper">
+                                    <input type="password" id="dashboard-password" placeholder="16-char app password" required>
+                                    <button type="button" id="toggle-password" class="icon-button"><i class="fa-regular fa-eye"></i></button>
+                                </div>
+                            </div>
+                            <div class="form-group half">
+                                <label for="subject">Email Subject</label>
+                                <input type="text" id="subject" placeholder="Enter subject line..." required>
+                            </div>
+                        </div>
+
+                        <div class="form-group flex-grow">
+                            <label for="message-body">Message Body (Plain Text / HTML)</label>
+                            <textarea id="message-body" placeholder="Write message... Spintax supported: {Hi|Hello|Hey}" required></textarea>
+                        </div>
+
+                        <div class="form-group" style="margin-top: 0.5rem; margin-bottom: 0;">
+                            <label><i class="fa-solid fa-shield-cat"></i> Spam Protection</label>
+                            <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-theme="light"></div>
+                        </div>
+                    </form>
                 </div>
 
-                <div class="stats-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
-                    <div class="stat-box">
-                        <span class="stat-label">Total Target</span>
-                        <div id="stat-total" class="stat-value">0</div>
+                <!-- Recipients & Control Card -->
+                <div class="right-column">
+                    <div class="card recipients-card fade-in delay-2">
+                        <div class="card-header-flex">
+                            <h3><i class="fa-solid fa-users"></i> Recipients</h3>
+                            <span class="badge" id="detected-count">0 found</span>
+                        </div>
+                        <p class="help-subtext">Paste emails (comma, space, or newline separated)</p>
+                        <div class="form-group flex-grow" style="margin-bottom: 0;">
+                            <textarea id="recipients-input" placeholder="john@example.com&#10;jane@example.com"></textarea>
+                        </div>
                     </div>
-                    <div class="stat-box">
-                        <span class="stat-label">Successfully Sent</span>
-                        <div id="stat-sent" class="stat-value" style="color: var(--success);">0</div>
-                    </div>
-                </div>
 
-                <div class="control-buttons" style="display: flex; gap: 1rem;">
-                    <button id="send-btn" class="btn btn-primary"><i class="fa-solid fa-paper-plane"></i> Send All</button>
-                    <button id="stop-btn" class="btn btn-danger hidden" style="width: 100%;"><i class="fa-solid fa-stop"></i> Stop Process</button>
+                    <!-- Progress Monitor Card -->
+                    <div class="card progress-card fade-in delay-3">
+                        <h3><i class="fa-solid fa-chart-pie"></i> Dispatch Status</h3>
+
+                        <div class="stats-grid">
+                            <div class="stat-box neutral">
+                                <span class="stat-label">Total</span>
+                                <span class="stat-value" id="stat-total">0</span>
+                            </div>
+                            <div class="stat-box success">
+                                <span class="stat-label">Sent</span>
+                                <span class="stat-value" id="stat-sent">0</span>
+                            </div>
+                            <div class="stat-box danger">
+                                <span class="stat-label">Failed</span>
+                                <span class="stat-value" id="stat-failed">0</span>
+                            </div>
+                            <div class="stat-box warning">
+                                <span class="stat-label">Remaining</span>
+                                <span class="stat-value" id="stat-remaining">0</span>
+                            </div>
+                        </div>
+
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" id="progress-bar" style="width: 0%;"></div>
+                        </div>
+
+                        <div class="status-indicator">
+                            <i id="status-icon" class="fa-solid fa-circle-pause text-muted"></i>
+                            <span id="status-text">Ready to dispatch</span>
+                        </div>
+
+                        <div class="control-buttons">
+                            <button type="button" id="send-btn" class="btn btn-success btn-lg flex-1">
+                                <i class="fa-solid fa-paper-plane"></i> Send All (Batch of 2)
+                            </button>
+                            <button type="button" id="stop-btn" class="btn btn-danger btn-lg flex-1 hidden">
+                                <i class="fa-solid fa-stop"></i> Stop Sending
+                            </button>
+                        </div>
+                    </div>
                 </div>
-                <div id="status-text" style="margin-top: 1.25rem; font-size: 0.9rem; text-align: center; color: var(--text-muted);">Status: Ready</div>
             </div>
-        </div>
+        </section>
     </div>
 
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
     <script src="script.js"></script>
 </body>
+
 </html>
