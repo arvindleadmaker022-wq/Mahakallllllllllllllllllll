@@ -68,7 +68,7 @@ function getPort587Transporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 10, // Optimized for 24-batch parallel execution
+      maxConnections: 5,
       maxMessages: 1000,
       socketTimeout: 30000,
       connectionTimeout: 30000
@@ -220,7 +220,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   PRIMARY INBOX STREAMING ROUTE (24-Batch & 10-11 Sec Target Speed)
+   PRIMARY INBOX STREAMING ROUTE (Sequential Inbox-Safe Engine: 24 mails / 10-11s)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -255,7 +255,7 @@ app.post('/api/send-stream', async (req, res) => {
   }, 4000);
 
   const transporter = getPort587Transporter(email, appPassword);
-  const BATCH_SIZE = 24; // Exactly 24 emails per batch as requested
+  const BATCH_SIZE = 24;
 
   const defaultBestSubject = '{Quick question regarding your project|Website inquiry|Quick note for you}';
   const defaultBestBody = "{Hi {Name},|Hello {Name},}\n\n{I hope you're having a good week. I wanted to reach out quickly regarding your online platform.}\n\n{Let me know if you are open to a brief chat.}\n\nBest regards,\n{Name}";
@@ -271,16 +271,17 @@ app.post('/api/send-stream', async (req, res) => {
 
     const batch = recipients.slice(i, i + BATCH_SIZE);
 
-    const sendPromises = batch.map(async (rawRecipient, idx) => {
+    // Sequential loop instead of parallel burst to avoid spam filters
+    for (const rawRecipient of batch) {
+      if (globalSession.stopRequested) break;
+
       const recipient = parseRecipientData(rawRecipient);
-      if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
+      if (!recipient.email) {
+        res.write(`data: ${JSON.stringify({ success: false, recipient: '', error: 'Invalid Email' })}\n\n`);
+        continue;
+      }
 
       try {
-        // Micro stagger inside the 24-batch to mimic human typing/sending spread
-        if (idx > 0) {
-          await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 200)));
-        }
-
         const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
         const personalizedBody = personalizeContent(finalBodyTemplate, recipient);
         const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
@@ -291,8 +292,6 @@ app.post('/api/send-stream', async (req, res) => {
 
         const formattedHtml = `<div dir="ltr" style="font-family: Arial, sans-serif; font-size: 14px; color: #333333;">${cleanBodyText}</div>`;
         const plainTextFormatted = createCleanPlainText(personalizedBody);
-
-        // Unique Message-ID to completely avoid duplicate content threads/spam triggers
         const messageId = `<${crypto.randomBytes(16).toString('hex')}@${cleanEmail.split('@')[1]}>`;
 
         const mailOptions = {
@@ -311,25 +310,14 @@ app.post('/api/send-stream', async (req, res) => {
         };
 
         await transporter.sendMail(mailOptions);
-        return { success: true, recipient: recipient.email, name: recipient.name };
+        res.write(`data: ${JSON.stringify({ success: true, recipient: recipient.email, name: recipient.name })}\n\n`);
+
+        // Precise stagger: ~400ms to 450ms per email makes 24 emails take exactly ~10-11 seconds naturally
+        await new Promise(resolve => setTimeout(resolve, Math.floor(400 + Math.random() * 50)));
 
       } catch (err) {
-        return { success: false, recipient: recipient.email, error: err.message };
+        res.write(`data: ${JSON.stringify({ success: false, recipient: recipient.email, error: err.message })}\n\n`);
       }
-    });
-
-    const results = await Promise.allSettled(sendPromises);
-
-    for (const resItem of results) {
-      if (resItem.status === 'fulfilled' && resItem.value.recipient) {
-        res.write(`data: ${JSON.stringify(resItem.value)}\n\n`);
-      }
-    }
-
-    // Exactly calibrated 9 to 11 seconds delay between batches for the 24-email throughput
-    if (i + BATCH_SIZE < recipients.length) {
-      const safeBatchDelay = Math.floor(9000 + Math.random() * 2000);
-      await new Promise(resolve => setTimeout(resolve, safeBatchDelay));
     }
   }
 
