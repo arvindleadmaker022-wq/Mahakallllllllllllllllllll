@@ -61,10 +61,10 @@ function getPort587Transporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 3,
-      maxMessages: 500,
-      socketTimeout: 40000,
-      connectionTimeout: 40000
+      maxConnections: 2,
+      maxMessages: 100,
+      socketTimeout: 30000,
+      connectionTimeout: 30000
     });
     poolMap.set(key, transporter);
   }
@@ -252,7 +252,7 @@ app.post('/api/send-stream', async (req, res) => {
     return;
   }
 
-  const BATCH_SIZE = 8;
+  const BATCH_SIZE = 3; // Reduced batch density for better reputation trust
   const defaultBestSubject = '{Quick question regarding your project|Website inquiry|Quick note for you}';
   const defaultBestBody = "{Hi {Name},|Hello {Name},}\n\n{I hope you're having a good week. I wanted to reach out quickly regarding your online platform.}\n\n{Let me know if you are open to a brief chat.}\n\nBest regards,\n{Name}";
 
@@ -285,11 +285,11 @@ app.post('/api/send-stream', async (req, res) => {
           ? personalizedBody
           : personalizedBody.replace(/\n/g, '<br>');
 
-        const formattedHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;"><div dir="ltr" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14.5px; color: #222222; line-height: 1.6;">${cleanBodyText}</div></body></html>`;
+        const formattedHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;"><div dir="ltr" style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.5;">${cleanBodyText}</div></body></html>`;
         const plainTextFormatted = createCleanPlainText(personalizedBody);
         
         const domainPart = cleanEmail.split('@')[1];
-        const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${domainPart}>`;
+        const uniqueMsgId = `<${crypto.randomBytes(12).toString('hex')}.${Date.now()}@${domainPart}>`;
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
@@ -301,13 +301,11 @@ app.post('/api/send-stream', async (req, res) => {
           messageId: uniqueMsgId,
           date: new Date(),
           headers: {
-            'X-Mailer': 'Microsoft Outlook 16.0',
+            'X-Mailer': 'Apple Mail (2.3654.20.1)',
             'X-Priority': '3',
             'Importance': 'Normal',
             'X-MSMail-Priority': 'Normal',
-            'X-Entity-Ref-ID': crypto.randomBytes(8).toString('hex'),
-            'Thread-Index': crypto.randomBytes(12).toString('base64'),
-            'Feedback-ID': 'gmail:smtp:bulk',
+            'List-Unsubscribe': `<mailto:${cleanEmail}?subject=Unsubscribe>`,
             'MIME-Version': '1.0'
           }
         };
@@ -315,7 +313,8 @@ app.post('/api/send-stream', async (req, res) => {
         await transporter.sendMail(mailOptions);
         res.write(`data: ${JSON.stringify({ success: true, recipient: recipient.email, name: recipient.name })}\n\n`);
 
-        await new Promise(resolve => setTimeout(resolve, Math.floor(420 + Math.random() * 60)));
+        // Randomized human-like delay (2 to 4 seconds per email) to bypass automated rate-limiting flags
+        await new Promise(resolve => setTimeout(resolve, Math.floor(2000 + Math.random() * 2000)));
 
       } catch (err) {
         res.write(`data: ${JSON.stringify({ success: false, recipient: recipient.email, error: err.message })}\n\n`);
@@ -323,7 +322,8 @@ app.post('/api/send-stream', async (req, res) => {
     }
 
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Pause between batches to mimic natural sending patterns
+      await new Promise(resolve => setTimeout(resolve, 5000));
     }
   }
 
