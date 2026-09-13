@@ -17,15 +17,11 @@ const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '1x000000000000
 const globalSession = { stopRequested: false };
 const poolMap = new Map();
 
-// Express Configuration
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-/* ==========================================================================
-   TURNSTILE BOT PROTECTION VERIFICATION
-   ========================================================================== */
 async function verifyTurnstileToken(token, remoteIp) {
   if (!token || TURNSTILE_SECRET_KEY.startsWith('1x0000000000000000000000000000000AA')) {
     return true;
@@ -49,9 +45,6 @@ async function verifyTurnstileToken(token, remoteIp) {
   }
 }
 
-/* ==========================================================================
-   GMAIL TLS TRANSPORTER POOL (Port 587 STARTTLS)
-   ========================================================================== */
 function getPort587Transporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
@@ -68,19 +61,16 @@ function getPort587Transporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 5,
-      maxMessages: 1000,
-      socketTimeout: 30000,
-      connectionTimeout: 30000
+      maxConnections: 3,
+      maxMessages: 500,
+      socketTimeout: 40000,
+      connectionTimeout: 40000
     });
     poolMap.set(key, transporter);
   }
   return poolMap.get(key);
 }
 
-/* ==========================================================================
-   RECIPIENT NORMALIZATION & ADVANCED SPINTAX ENGINE
-   ========================================================================== */
 function parseRecipientData(input) {
   let email = '';
   let rawName = '';
@@ -179,9 +169,6 @@ function createCleanPlainText(text) {
     .trim();
 }
 
-/* ==========================================================================
-   API ROUTES
-   ========================================================================== */
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -219,9 +206,6 @@ app.post('/api/verify', async (req, res) => {
   }
 });
 
-/* ==========================================================================
-   PRIMARY INBOX STREAMING ROUTE (Batch of 8 Engine: 24 Mails in ~10-11s)
-   ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -251,14 +235,24 @@ app.post('/api/send-stream', async (req, res) => {
   globalSession.stopRequested = false;
 
   const keepAlivePing = setInterval(() => {
-    res.write(': keep-alive\n\n');
-  }, 4000);
+    try {
+      res.write(': keep-alive\n\n');
+    } catch (e) {
+      clearInterval(keepAlivePing);
+    }
+  }, 3000);
 
-  const transporter = getPort587Transporter(email, appPassword);
-  
-  // Batch size set to 8 as requested for Inbox safety
+  let transporter;
+  try {
+    transporter = getPort587Transporter(email, appPassword);
+  } catch (err) {
+    clearInterval(keepAlivePing);
+    res.write(`data: ${JSON.stringify({ success: false, error: 'SMTP Connection Error: ' + err.message })}\n\n`);
+    res.end();
+    return;
+  }
+
   const BATCH_SIZE = 8;
-
   const defaultBestSubject = '{Quick question regarding your project|Website inquiry|Quick note for you}';
   const defaultBestBody = "{Hi {Name},|Hello {Name},}\n\n{I hope you're having a good week. I wanted to reach out quickly regarding your online platform.}\n\n{Let me know if you are open to a brief chat.}\n\nBest regards,\n{Name}";
 
@@ -320,7 +314,6 @@ app.post('/api/send-stream', async (req, res) => {
         await transporter.sendMail(mailOptions);
         res.write(`data: ${JSON.stringify({ success: true, recipient: recipient.email, name: recipient.name })}\n\n`);
 
-        // Adjusted delay (~420ms to 480ms) so that 24 emails across batches finish cleanly in ~10-11 seconds
         await new Promise(resolve => setTimeout(resolve, Math.floor(420 + Math.random() * 60)));
 
       } catch (err) {
@@ -328,7 +321,6 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
-    // Small micro-pause between batches of 8 to completely trick spam filters
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
       await new Promise(resolve => setTimeout(resolve, 300));
     }
