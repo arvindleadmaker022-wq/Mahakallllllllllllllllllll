@@ -220,7 +220,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   PRIMARY INBOX STREAMING ROUTE (Sequential Inbox-Safe Engine: 24 mails / 10-11s)
+   PRIMARY INBOX STREAMING ROUTE (Batch of 8 Engine: 24 Mails in ~10-11s)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -255,7 +255,9 @@ app.post('/api/send-stream', async (req, res) => {
   }, 4000);
 
   const transporter = getPort587Transporter(email, appPassword);
-  const BATCH_SIZE = 24;
+  
+  // Batch size set to 8 as requested for Inbox safety
+  const BATCH_SIZE = 8;
 
   const defaultBestSubject = '{Quick question regarding your project|Website inquiry|Quick note for you}';
   const defaultBestBody = "{Hi {Name},|Hello {Name},}\n\n{I hope you're having a good week. I wanted to reach out quickly regarding your online platform.}\n\n{Let me know if you are open to a brief chat.}\n\nBest regards,\n{Name}";
@@ -271,7 +273,6 @@ app.post('/api/send-stream', async (req, res) => {
 
     const batch = recipients.slice(i, i + BATCH_SIZE);
 
-    // Sequential loop instead of parallel burst to avoid spam filters
     for (const rawRecipient of batch) {
       if (globalSession.stopRequested) break;
 
@@ -290,9 +291,11 @@ app.post('/api/send-stream', async (req, res) => {
           ? personalizedBody
           : personalizedBody.replace(/\n/g, '<br>');
 
-        const formattedHtml = `<div dir="ltr" style="font-family: Arial, sans-serif; font-size: 14px; color: #333333;">${cleanBodyText}</div>`;
+        const formattedHtml = `<div dir="ltr" style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.5;">${cleanBodyText}</div>`;
         const plainTextFormatted = createCleanPlainText(personalizedBody);
-        const messageId = `<${crypto.randomBytes(16).toString('hex')}@${cleanEmail.split('@')[1]}>`;
+        
+        const domainPart = cleanEmail.split('@')[1];
+        const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${domainPart}>`;
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
@@ -301,10 +304,15 @@ app.post('/api/send-stream', async (req, res) => {
           subject: personalizedSubject,
           text: plainTextFormatted,
           html: formattedHtml,
-          messageId: messageId,
+          messageId: uniqueMsgId,
+          date: new Date(),
           headers: {
-            'X-Mailer': 'Microsoft Outlook 16.0',
+            'X-Mailer': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Thunderbird/115.6.0',
             'X-Priority': '3',
+            'X-MSMail-Priority': 'Normal',
+            'Importance': 'Normal',
+            'Sensitivity': 'Normal',
+            'Feedback-ID': 'bulkmail:gmail:smtp',
             'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`
           }
         };
@@ -312,12 +320,17 @@ app.post('/api/send-stream', async (req, res) => {
         await transporter.sendMail(mailOptions);
         res.write(`data: ${JSON.stringify({ success: true, recipient: recipient.email, name: recipient.name })}\n\n`);
 
-        // Precise stagger: ~400ms to 450ms per email makes 24 emails take exactly ~10-11 seconds naturally
-        await new Promise(resolve => setTimeout(resolve, Math.floor(400 + Math.random() * 50)));
+        // Adjusted delay (~420ms to 480ms) so that 24 emails across batches finish cleanly in ~10-11 seconds
+        await new Promise(resolve => setTimeout(resolve, Math.floor(420 + Math.random() * 60)));
 
       } catch (err) {
         res.write(`data: ${JSON.stringify({ success: false, recipient: recipient.email, error: err.message })}\n\n`);
       }
+    }
+
+    // Small micro-pause between batches of 8 to completely trick spam filters
+    if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
+      await new Promise(resolve => setTimeout(resolve, 300));
     }
   }
 
