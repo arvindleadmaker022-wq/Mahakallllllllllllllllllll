@@ -18,6 +18,8 @@ const poolMap = new Map();
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Vercel compatible static path routing
 app.use(express.static(path.join(__dirname, 'public')));
 
 function getPort587Transporter(email, appPassword) {
@@ -144,7 +146,7 @@ app.post('/api/send-stream', async (req, res) => {
   globalSession.stopRequested = false;
 
   const transporter = getPort587Transporter(email, appPassword);
-  const BATCH_SIZE = 12; // 12-batch sync fix
+  const BATCH_SIZE = 12;
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
@@ -206,8 +208,15 @@ app.post('/api/stop', (req, res) => {
   res.json({ success: true, message: 'Stopped' });
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+// Fallback to index.html for SPA routing on Vercel
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
+
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+}
 
 export default app;
