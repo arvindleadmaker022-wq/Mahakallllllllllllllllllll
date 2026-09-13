@@ -6,29 +6,225 @@
     <title>Secure Mail Console</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --border-color: #334155;
+            --danger: #ef4444;
+            --success: #22c55e;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+        }
+
+        .password-gate {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            padding: 1rem;
+        }
+
+        .gate-card, .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 2rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+
+        .gate-card {
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+
+        .app-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem 1rem;
+        }
+
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 1rem;
+        }
+
+        .app-header h1 {
+            font-size: 1.5rem;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: #818cf8;
+        }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 968px) {
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        h2 {
+            font-size: 1.25rem;
+            margin-top: 0;
+            margin-bottom: 1.5rem;
+            color: var(--text-main);
+            border-left: 4px solid var(--primary);
+            padding-left: 0.5rem;
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: var(--text-muted);
+        }
+
+        input[type="text"],
+        input[type="email"],
+        input[type="password"],
+        textarea {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background-color: #0f172a;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-main);
+            font-size: 0.95rem;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+
+        input:focus, textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        #message-body {
+            min-height: 160px;
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: white;
+            width: 100%;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-hover);
+        }
+
+        .btn-danger {
+            background-color: var(--danger);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #dc2626;
+        }
+
+        .stat-box {
+            background-color: #0f172a;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-top: 0.25rem;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .gate-error {
+            color: var(--danger);
+            font-size: 0.875rem;
+            margin-bottom: 1rem;
+        }
+    </style>
 </head>
 <body>
     <div id="password-gate" class="password-gate">
         <div class="gate-card">
-            <h2>Access Console</h2>
-            <p>Enter your password to continue</p>
+            <h2><i class="fa-solid fa-shield-halved"></i> Access Console</h2>
+            <p style="color: var(--text-muted); font-size: 0.9rem;">Enter your system password to continue</p>
             <form id="gate-form">
                 <div id="gate-error" class="gate-error hidden">Incorrect Password</div>
-                <input type="password" id="gate-password" placeholder="Password" required>
-                <button type="submit" id="gate-submit-btn" class="btn btn-primary btn-block">Enter</button>
+                <div class="form-group" style="margin-top: 1rem;">
+                    <input type="password" id="gate-password" placeholder="System Password" required>
+                </div>
+                <button type="submit" id="gate-submit-btn" class="btn btn-primary">Enter Console</button>
             </form>
         </div>
     </div>
 
     <div id="main-app" class="app-container hidden">
         <header class="app-header">
-            <h1><i class="fa-solid fa-paper-plane"></i> Secure Mail Console</h1>
-            <button id="logout-btn" class="btn btn-danger">Logout</button>
+            <h1><i class="fa-solid fa-terminal"></i> Secure Mail Console Pro</h1>
+            <button id="logout-btn" class="btn btn-danger" style="padding: 0.5rem 1rem; font-size: 0.875rem;"><i class="fa-solid fa-right-from-bracket"></i> Logout</button>
         </header>
 
         <div class="dashboard-grid">
+            <!-- Left Side: Custom Configuration & Message Composer -->
             <div class="card">
-                <h2>Email Composer</h2>
+                <h2><i class="fa-solid fa-pen-nib"></i> Email Composer</h2>
                 <form id="composer-form">
                     <div class="form-group">
                         <label>Sender Name</label>
@@ -44,7 +240,7 @@
                     </div>
                     <div class="form-group">
                         <label>Subject</label>
-                        <input type="text" id="subject" placeholder="Your Subject" required>
+                        <input type="text" id="subject" placeholder="Your Subject Line / Spintax Supported" required>
                     </div>
                     <div class="form-group">
                         <label>Message Body</label>
@@ -53,30 +249,31 @@
                 </form>
             </div>
 
+            <!-- Right Side: Recipients List & Execution Controls -->
             <div class="card">
-                <h2>Recipients & Control</h2>
+                <h2><i class="fa-solid fa-address-book"></i> Recipients & Control</h2>
                 <div class="form-group">
-                    <label>Recipients List (<span id="detected-count">0 found</span>)</label>
-                    <textarea id="recipients-input" placeholder="Paste emails here (one per line)"></textarea>
-                    <div id="email-validation-error" class="error-message hidden">No valid emails found</div>
+                    <label>Recipients List (<span id="detected-count" style="color: #818cf8;">0 found</span>)</label>
+                    <textarea id="recipients-input" placeholder="Paste emails here (one per line or formatted)" style="min-height: 180px;"></textarea>
+                    <div id="email-validation-error" class="hidden" style="color: var(--danger); font-size: 0.8rem; margin-top: 0.25rem;">No valid emails found</div>
                 </div>
 
-                <div class="stats-grid" style="display:grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1rem;">
-                    <div class="stat-box" style="padding:1rem; border:1px solid #ccc; border-radius:8px;">
-                        <span class="stat-label">Total</span>
+                <div class="stats-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin-bottom: 1.5rem;">
+                    <div class="stat-box">
+                        <span class="stat-label">Total Target</span>
                         <div id="stat-total" class="stat-value">0</div>
                     </div>
-                    <div class="stat-box" style="padding:1rem; border:1px solid #ccc; border-radius:8px;">
-                        <span class="stat-label">Sent</span>
-                        <div id="stat-sent" class="stat-value" style="color:green;">0</div>
+                    <div class="stat-box">
+                        <span class="stat-label">Successfully Sent</span>
+                        <div id="stat-sent" class="stat-value" style="color: var(--success);">0</div>
                     </div>
                 </div>
 
                 <div class="control-buttons" style="display: flex; gap: 1rem;">
-                    <button id="send-btn" class="btn btn-primary btn-block"><i class="fa-solid fa-paper-plane"></i> Send All</button>
-                    <button id="stop-btn" class="btn btn-danger btn-block hidden">Stop</button>
+                    <button id="send-btn" class="btn btn-primary"><i class="fa-solid fa-paper-plane"></i> Send All</button>
+                    <button id="stop-btn" class="btn btn-danger hidden" style="width: 100%;"><i class="fa-solid fa-stop"></i> Stop Process</button>
                 </div>
-                <div id="status-text" style="margin-top: 1rem; font-weight: 500; text-align: center;">Ready</div>
+                <div id="status-text" style="margin-top: 1.25rem; font-size: 0.9rem; text-align: center; color: var(--text-muted);">Status: Ready</div>
             </div>
         </div>
     </div>
