@@ -15,7 +15,6 @@ const SITE_PASSWORD = process.env.SITE_PASSWORD || 'Y##';
 const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
 
 const globalSession = { stopRequested: false };
-const poolMap = new Map();
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -44,31 +43,23 @@ async function verifyTurnstileToken(token, remoteIp) {
   }
 }
 
-// Optimized SMTP config for strict TLS and connection recycling
-function getPort587Transporter(email, appPassword) {
+// Fresh transport create karna har connection ke liye taaki pooling flag na ho
+function createFreshTransporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
-  const key = `inbox_pro_${cleanEmail}_${cleanPass}`;
 
-  if (!poolMap.has(key)) {
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      requireTLS: true,
-      auth: {
-        user: cleanEmail,
-        pass: cleanPass
-      },
-      pool: true,
-      maxConnections: 1, // Ek waqt mein sirf 1 connection taaki bot jaisa behave na kare
-      maxMessages: 20,   // Thodi der baad connection refresh hoga
-      socketTimeout: 40000,
-      connectionTimeout: 40000
-    });
-    poolMap.set(key, transporter);
-  }
-  return poolMap.get(key);
+  return nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465, // Port 465 secure SSL use karne se spam filters kam trigger hote hain
+    secure: true,
+    auth: {
+      user: cleanEmail,
+      pass: cleanPass
+    },
+    tls: {
+      rejectUnauthorized: true
+    }
+  });
 }
 
 function parseRecipientData(input) {
@@ -195,7 +186,7 @@ app.post('/api/verify', async (req, res) => {
   }
 
   try {
-    const transporter = getPort587Transporter(email, appPassword);
+    const transporter = createFreshTransporter(email, appPassword);
     await transporter.verify();
     return res.json({ success: true, message: 'SMTP verified successfully' });
   } catch (error) {
@@ -242,23 +233,13 @@ app.post('/api/send-stream', async (req, res) => {
     }
   }, 3000);
 
-  let transporter;
-  try {
-    transporter = getPort587Transporter(email, appPassword);
-  } catch (err) {
-    clearInterval(keepAlivePing);
-    res.write(`data: ${JSON.stringify({ success: false, error: 'SMTP Connection Error: ' + err.message })}\n\n`);
-    res.end();
-    return;
-  }
-
   const defaultBestSubject = '{Hello|Hi|Greetings} {Name}';
   const defaultBestBody = "{Hi {Name},|Hello {Name},}\n\n{Hope you are doing well. Just wanted to drop a quick note to connect with you.}\n\nBest regards,\n{Name}";
 
   const finalSubjectTemplate = (subject && subject.trim()) ? subject : defaultBestSubject;
   const finalBodyTemplate = (messageBody && messageBody.trim()) ? messageBody : defaultBestBody;
 
-  // Har ek email ko ek-ek karke bhejenge taaki bulk/spam trigger na ho
+  // Har ek email ke liye alag transporter aur lamba delay taki spam filter bypass ho
   for (let i = 0; i < recipients.length; i++) {
     if (globalSession.stopRequested) {
       res.write(`data: ${JSON.stringify({ success: false, error: 'Stopped by User' })}\n\n`);
@@ -274,6 +255,7 @@ app.post('/api/send-stream', async (req, res) => {
     }
 
     try {
+      const transporter = createFreshTransporter(email, appPassword);
       const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
       const personalizedBody = personalizeContent(finalBodyTemplate, recipient);
       const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
@@ -282,8 +264,7 @@ app.post('/api/send-stream', async (req, res) => {
         ? personalizedBody
         : personalizedBody.replace(/\n/g, '<br>');
 
-      // Clean HTML structure jisme koi tracking pixel ya hidden style na ho
-      const formattedHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;"><div dir="ltr" style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #222222; line-height: 1.6;">${cleanBodyText}</div></body></html>`;
+      const formattedHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;"><div dir="ltr" style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.5;">${cleanBodyText}</div></body></html>`;
       const plainTextFormatted = createCleanPlainText(personalizedBody);
       
       const domainPart = cleanEmail.split('@')[1];
@@ -299,11 +280,10 @@ app.post('/api/send-stream', async (req, res) => {
         messageId: uniqueMsgId,
         date: new Date(),
         headers: {
-          'X-Mailer': 'Microsoft Outlook 16.0',
+          'X-Mailer': 'Apple Mail (2.3654.20.1)',
           'X-Priority': '3',
           'Importance': 'Normal',
-          'X-MSMail-Priority': 'Normal',
-          'Feedback-ID': crypto.randomBytes(8).toString('hex') + ':GmailSMTP',
+          'List-Unsubscribe': `<mailto:${cleanEmail}?subject=Unsubscribe>`,
           'MIME-Version': '1.0'
         }
       };
@@ -311,9 +291,8 @@ app.post('/api/send-stream', async (req, res) => {
       await transporter.sendMail(mailOptions);
       res.write(`data: ${JSON.stringify({ success: true, recipient: recipient.email, name: recipient.name })}\n\n`);
 
-      // 💡 SABSE IMPORTANT: Har email ke beech mein 7 se 14 seconds ka random gap
-      // Taki Google ko lage ki ek asli insaan manual ek-ek email type karke bhej raha hai.
-      const randomDelay = Math.floor(7000 + Math.random() * 7000);
+      // 💡 Har email ke beech mein 10 se 20 seconds ka random gap zaroori hai
+      const randomDelay = Math.floor(10000 + Math.random() * 10000);
       await new Promise(resolve => setTimeout(resolve, randomDelay));
 
     } catch (err) {
