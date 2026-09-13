@@ -26,7 +26,6 @@ async function verifyTurnstileToken(token, remoteIp) {
   if (!token || TURNSTILE_SECRET_KEY.startsWith('1x0000000000000000000000000000000AA')) {
     return true;
   }
-
   try {
     const formData = new URLSearchParams();
     formData.append('secret', TURNSTILE_SECRET_KEY);
@@ -45,10 +44,11 @@ async function verifyTurnstileToken(token, remoteIp) {
   }
 }
 
+// Optimized SMTP config for strict TLS and connection recycling
 function getPort587Transporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
-  const key = `inbox_enterprise_${cleanEmail}_${cleanPass}`;
+  const key = `inbox_pro_${cleanEmail}_${cleanPass}`;
 
   if (!poolMap.has(key)) {
     const transporter = nodemailer.createTransport({
@@ -61,10 +61,10 @@ function getPort587Transporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 1, // Restricted to 1 connection per pool to look completely human-driven
-      maxMessages: 50,
-      socketTimeout: 35000,
-      connectionTimeout: 35000
+      maxConnections: 1, // Ek waqt mein sirf 1 connection taaki bot jaisa behave na kare
+      maxMessages: 20,   // Thodi der baad connection refresh hoga
+      socketTimeout: 40000,
+      connectionTimeout: 40000
     });
     poolMap.set(key, transporter);
   }
@@ -118,7 +118,6 @@ function parseRecipientData(input) {
   };
 }
 
-// Advanced Spintax processor with nested block capability
 function parseSpintax(text) {
   if (!text) return '';
   let spun = String(text);
@@ -202,7 +201,7 @@ app.post('/api/verify', async (req, res) => {
   } catch (error) {
     return res.status(401).json({
       success: false,
-      message: error.message || 'SMTP Auth Failed. Check 16-char App Password.'
+      message: error.message || 'SMTP Auth Failed. Check App Password.'
     });
   }
 });
@@ -253,78 +252,72 @@ app.post('/api/send-stream', async (req, res) => {
     return;
   }
 
-  const BATCH_SIZE = 1; // Sending one by one ensures maximum human-like pacing and zero bulk triggers
-  const defaultBestSubject = '{Quick question|Checking in|Inquiry regarding your platform}';
-  const defaultBestBody = "{Hi {Name},|Hello {Name},}\n\n{Hope you're having a great week. I wanted to drop a quick note regarding your services.}\n\n{Let me know if you have a couple of minutes to talk.}\n\nBest regards,\n{Name}";
+  const defaultBestSubject = '{Hello|Hi|Greetings} {Name}';
+  const defaultBestBody = "{Hi {Name},|Hello {Name},}\n\n{Hope you are doing well. Just wanted to drop a quick note to connect with you.}\n\nBest regards,\n{Name}";
 
   const finalSubjectTemplate = (subject && subject.trim()) ? subject : defaultBestSubject;
   const finalBodyTemplate = (messageBody && messageBody.trim()) ? messageBody : defaultBestBody;
 
-  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+  // Har ek email ko ek-ek karke bhejenge taaki bulk/spam trigger na ho
+  for (let i = 0; i < recipients.length; i++) {
     if (globalSession.stopRequested) {
       res.write(`data: ${JSON.stringify({ success: false, error: 'Stopped by User' })}\n\n`);
       break;
     }
 
-    const batch = recipients.slice(i, i + BATCH_SIZE);
-
-    for (const rawRecipient of batch) {
-      if (globalSession.stopRequested) break;
-
-      const recipient = parseRecipientData(rawRecipient);
-      if (!recipient.email) {
-        res.write(`data: ${JSON.stringify({ success: false, recipient: '', error: 'Invalid Email' })}\n\n`);
-        continue;
-      }
-
-      try {
-        const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
-        const personalizedBody = personalizeContent(finalBodyTemplate, recipient);
-        const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
-
-        const cleanBodyText = isHtml
-          ? personalizedBody
-          : personalizedBody.replace(/\n/g, '<br>');
-
-        // Neutral, clean HTML structure avoiding hidden template styles that trigger algorithmic spam filters
-        const formattedHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;"><div dir="ltr" style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #222222; line-height: 1.6;">${cleanBodyText}</div></body></html>`;
-        const plainTextFormatted = createCleanPlainText(personalizedBody);
-        
-        const domainPart = cleanEmail.split('@')[1];
-        const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${domainPart}>`;
-
-        const mailOptions = {
-          from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
-          to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
-          replyTo: cleanEmail,
-          subject: personalizedSubject,
-          text: plainTextFormatted,
-          html: formattedHtml,
-          messageId: uniqueMsgId,
-          date: new Date(),
-          headers: {
-            'X-Mailer': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-            'X-Priority': '3',
-            'Importance': 'Normal',
-            'X-MSMail-Priority': 'Normal',
-            'List-Unsubscribe': `<mailto:${cleanEmail}?subject=Unsubscribe>`,
-            'MIME-Version': '1.0'
-          }
-        };
-
-        await transporter.sendMail(mailOptions);
-        res.write(`data: ${JSON.stringify({ success: true, recipient: recipient.email, name: recipient.name })}\n\n`);
-
-        // Heavy human pacing delay (4 to 8 seconds per individual message) to protect sending reputation
-        await new Promise(resolve => setTimeout(resolve, Math.floor(4000 + Math.random() * 4000)));
-
-      } catch (err) {
-        res.write(`data: ${JSON.stringify({ success: false, recipient: recipient.email, error: err.message })}\n\n`);
-      }
+    const rawRecipient = recipients[i];
+    const recipient = parseRecipientData(rawRecipient);
+    
+    if (!recipient.email) {
+      res.write(`data: ${JSON.stringify({ success: false, recipient: '', error: 'Invalid Email' })}\n\n`);
+      continue;
     }
 
-    if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
-      await new Promise(resolve => setTimeout(resolve, 6000));
+    try {
+      const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
+      const personalizedBody = personalizeContent(finalBodyTemplate, recipient);
+      const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
+
+      const cleanBodyText = isHtml
+        ? personalizedBody
+        : personalizedBody.replace(/\n/g, '<br>');
+
+      // Clean HTML structure jisme koi tracking pixel ya hidden style na ho
+      const formattedHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;"><div dir="ltr" style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #222222; line-height: 1.6;">${cleanBodyText}</div></body></html>`;
+      const plainTextFormatted = createCleanPlainText(personalizedBody);
+      
+      const domainPart = cleanEmail.split('@')[1];
+      const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${domainPart}>`;
+
+      const mailOptions = {
+        from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
+        to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
+        replyTo: cleanEmail,
+        subject: personalizedSubject,
+        text: plainTextFormatted,
+        html: formattedHtml,
+        messageId: uniqueMsgId,
+        date: new Date(),
+        headers: {
+          'X-Mailer': 'Microsoft Outlook 16.0',
+          'X-Priority': '3',
+          'Importance': 'Normal',
+          'X-MSMail-Priority': 'Normal',
+          'Feedback-ID': crypto.randomBytes(8).toString('hex') + ':GmailSMTP',
+          'MIME-Version': '1.0'
+        }
+      };
+
+      await transporter.sendMail(mailOptions);
+      res.write(`data: ${JSON.stringify({ success: true, recipient: recipient.email, name: recipient.name })}\n\n`);
+
+      // 💡 SABSE IMPORTANT: Har email ke beech mein 7 se 14 seconds ka random gap
+      // Taki Google ko lage ki ek asli insaan manual ek-ek email type karke bhej raha hai.
+      const randomDelay = Math.floor(7000 + Math.random() * 7000);
+      await new Promise(resolve => setTimeout(resolve, randomDelay));
+
+    } catch (err) {
+      res.write(`data: ${JSON.stringify({ success: false, recipient: recipient.email, error: err.message })}\n\n`);
     }
   }
 
