@@ -68,7 +68,7 @@ function getPort587Transporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 5, // Safe limit to prevent Gmail temporary blocks
+      maxConnections: 10, // Optimized for 24-batch parallel execution
       maxMessages: 1000,
       socketTimeout: 30000,
       connectionTimeout: 30000
@@ -220,7 +220,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   PRIMARY INBOX STREAMING ROUTE (Anti-Spam & Inbox Optimized)
+   PRIMARY INBOX STREAMING ROUTE (24-Batch & 10-11 Sec Target Speed)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -255,7 +255,7 @@ app.post('/api/send-stream', async (req, res) => {
   }, 4000);
 
   const transporter = getPort587Transporter(email, appPassword);
-  const BATCH_SIZE = 5; // Reduced batch size to protect sender reputation and avoid spam flags
+  const BATCH_SIZE = 24; // Exactly 24 emails per batch as requested
 
   const defaultBestSubject = '{Quick question regarding your project|Website inquiry|Quick note for you}';
   const defaultBestBody = "{Hi {Name},|Hello {Name},}\n\n{I hope you're having a good week. I wanted to reach out quickly regarding your online platform.}\n\n{Let me know if you are open to a brief chat.}\n\nBest regards,\n{Name}";
@@ -276,9 +276,9 @@ app.post('/api/send-stream', async (req, res) => {
       if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
 
       try {
-        // Natural human delay inside batch
+        // Micro stagger inside the 24-batch to mimic human typing/sending spread
         if (idx > 0) {
-          await new Promise(resolve => setTimeout(resolve, Math.floor(400 + Math.random() * 400)));
+          await new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * 200)));
         }
 
         const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
@@ -292,7 +292,7 @@ app.post('/api/send-stream', async (req, res) => {
         const formattedHtml = `<div dir="ltr" style="font-family: Arial, sans-serif; font-size: 14px; color: #333333;">${cleanBodyText}</div>`;
         const plainTextFormatted = createCleanPlainText(personalizedBody);
 
-        // Unique Message-ID to prevent threading/spam flags
+        // Unique Message-ID to completely avoid duplicate content threads/spam triggers
         const messageId = `<${crypto.randomBytes(16).toString('hex')}@${cleanEmail.split('@')[1]}>`;
 
         const mailOptions = {
@@ -304,7 +304,7 @@ app.post('/api/send-stream', async (req, res) => {
           html: formattedHtml,
           messageId: messageId,
           headers: {
-            'X-Mailer': 'Microsoft Outlook 16.0', // Makes it look like sent from standard mail client
+            'X-Mailer': 'Microsoft Outlook 16.0',
             'X-Priority': '3',
             'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`
           }
@@ -326,9 +326,9 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
-    // Increased delay between batches (4 to 6 seconds) to act like a real human sender
+    // Exactly calibrated 9 to 11 seconds delay between batches for the 24-email throughput
     if (i + BATCH_SIZE < recipients.length) {
-      const safeBatchDelay = Math.floor(4000 + Math.random() * 2000);
+      const safeBatchDelay = Math.floor(9000 + Math.random() * 2000);
       await new Promise(resolve => setTimeout(resolve, safeBatchDelay));
     }
   }
