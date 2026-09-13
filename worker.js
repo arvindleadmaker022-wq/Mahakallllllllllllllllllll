@@ -1,118 +1,66 @@
 import 'dotenv/config';
-import express from 'express';
-import http from 'http';
 import nodemailer from 'nodemailer';
-import cors from 'cors';
-import path from 'path';
-import { fileURLToPath } from 'url';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const SITE_PASSWORD = 'changeme';
 
-const app = express();
-const server = http.createServer(app);
+export default {
+  async fetch(request, env, ctx) {
+    const url = new URL(request.url);
+    const path = url.pathname;
 
-const SITE_PASSWORD = process.env.SITE_PASSWORD || 'changeme';
-
-app.use(cors());
-app.use(express.json({ limit: "10mb" }));
-app.use(express.static(path.join(__dirname, "public")));
-
-const transporters = new Map();
-
-function getTransporter(email, appPassword) {
-  const cleanEmail = email.toLowerCase().trim();
-  const cacheKey = `${cleanEmail}_${appPassword}`;
-
-  if (!transporters.has(cacheKey)) {
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: cleanEmail,
-        pass: appPassword
-      }
-    });
-    transporters.set(cacheKey, transporter);
-  }
-  return transporters.get(cacheKey);
-}
-
-// Authentication
-app.post("/api/auth", (req, res) => {
-  const { password } = req.body;
-  if (!password) {
-    return res.status(400).json({ success: false, message: "Password is required" });
-  }
-  if (password === SITE_PASSWORD) {
-    return res.json({ success: true, message: "Access granted" });
-  }
-  return res.status(401).json({ success: false, message: "Incorrect password" });
-});
-
-// Verify Credentials
-app.post("/api/verify", async (req, res) => {
-  const { email, appPassword } = req.body;
-
-  if (!email || !appPassword) {
-    return res.status(400).json({ success: false, message: "Credentials required" });
-  }
-
-  try {
-    const transporter = getTransporter(email, appPassword);
-    await transporter.verify();
-    return res.json({ success: true, message: "SMTP connection verified" });
-  } catch (error) {
-    return res.status(401).json({ success: false, message: "Authentication failed" });
-  }
-});
-
-// Stream Endpoint
-app.post("/api/send-stream", async (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-
-  const { email, appPassword, senderName, subject, messageBody, recipients } = req.body;
-
-  if (!email || !appPassword || !Array.isArray(recipients) || recipients.length === 0) {
-    res.write(`data: ${JSON.stringify({ success: false, error: "Missing required fields" })}\n\n`);
-    res.end();
-    return;
-  }
-
-  const senderEmail = email.toLowerCase().trim();
-  const transporter = getTransporter(email, appPassword);
-  const cleanSenderName = (senderName || "").replace(/"/g, "").trim();
-
-  for (let index = 0; index < recipients.length; index++) {
-    const recipient = recipients[index] ? recipients[index].trim() : "";
-    if (!recipient) continue;
-
-    const mailOptions = {
-      from: cleanSenderName ? `"${cleanSenderName}" <${senderEmail}>` : senderEmail,
-      to: recipient,
-      subject: subject,
-      text: messageBody
+    // CORS Headers
+    const corsHeaders = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type',
     };
 
-    try {
-      await transporter.sendMail(mailOptions);
-      res.write(`data: ${JSON.stringify({ success: true, recipient })}\n\n`);
-    } catch (error) {
-      res.write(`data: ${JSON.stringify({ success: false, recipient, error: error.message })}\n\n`);
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { headers: corsHeaders });
     }
 
-    // Standard rate delay (1.5 seconds)
-    if (index < recipients.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 1500));
+    try {
+      if (path === '/api/auth' && request.method === 'POST') {
+        const body = await request.json();
+        if (body.password === (env.SITE_PASSWORD || SITE_PASSWORD)) {
+          return new Response(JSON.stringify({ success: true, message: "Access granted" }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+        return new Response(JSON.stringify({ success: false, message: "Incorrect password" }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      if (path === '/api/verify' && request.method === 'POST') {
+        const { email, appPassword } = await request.json();
+        if (!email || !appPassword) {
+          return new Response(JSON.stringify({ success: false, message: "Credentials required" }), {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        const transporter = nodemailer.createTransport({
+          host: 'smtp.gmail.com',
+          port: 587,
+          secure: false,
+          auth: { user: email.trim(), pass: appPassword.replace(/\s+/g, '') }
+        });
+
+        await transporter.verify();
+        return new Response(JSON.stringify({ success: true, message: "SMTP verified successfully" }), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      return new Response("Not Found", { status: 404, headers: corsHeaders });
+    } catch (err) {
+      return new Response(JSON.stringify({ success: false, message: err.message }), {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
     }
   }
-
-  res.write("data: [DONE]\n\n");
-  res.end();
-});
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server running on port ${PORT}`);
-});
+};
