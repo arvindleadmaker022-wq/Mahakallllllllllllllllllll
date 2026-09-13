@@ -61,10 +61,10 @@ function getPort587Transporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 2,
-      maxMessages: 100,
-      socketTimeout: 30000,
-      connectionTimeout: 30000
+      maxConnections: 1, // Restricted to 1 connection per pool to look completely human-driven
+      maxMessages: 50,
+      socketTimeout: 35000,
+      connectionTimeout: 35000
     });
     poolMap.set(key, transporter);
   }
@@ -118,13 +118,14 @@ function parseRecipientData(input) {
   };
 }
 
+// Advanced Spintax processor with nested block capability
 function parseSpintax(text) {
   if (!text) return '';
   let spun = String(text);
   const regex = /\{([^{}]+)\}/s;
   let iterations = 0;
 
-  while (regex.test(spun) && iterations < 25) {
+  while (regex.test(spun) && iterations < 30) {
     spun = spun.replace(regex, (_, choices) => {
       if (!choices.includes('|')) return choices;
       const options = choices.split('|');
@@ -252,9 +253,9 @@ app.post('/api/send-stream', async (req, res) => {
     return;
   }
 
-  const BATCH_SIZE = 3; // Reduced batch density for better reputation trust
-  const defaultBestSubject = '{Quick question regarding your project|Website inquiry|Quick note for you}';
-  const defaultBestBody = "{Hi {Name},|Hello {Name},}\n\n{I hope you're having a good week. I wanted to reach out quickly regarding your online platform.}\n\n{Let me know if you are open to a brief chat.}\n\nBest regards,\n{Name}";
+  const BATCH_SIZE = 1; // Sending one by one ensures maximum human-like pacing and zero bulk triggers
+  const defaultBestSubject = '{Quick question|Checking in|Inquiry regarding your platform}';
+  const defaultBestBody = "{Hi {Name},|Hello {Name},}\n\n{Hope you're having a great week. I wanted to drop a quick note regarding your services.}\n\n{Let me know if you have a couple of minutes to talk.}\n\nBest regards,\n{Name}";
 
   const finalSubjectTemplate = (subject && subject.trim()) ? subject : defaultBestSubject;
   const finalBodyTemplate = (messageBody && messageBody.trim()) ? messageBody : defaultBestBody;
@@ -285,11 +286,12 @@ app.post('/api/send-stream', async (req, res) => {
           ? personalizedBody
           : personalizedBody.replace(/\n/g, '<br>');
 
-        const formattedHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;"><div dir="ltr" style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.5;">${cleanBodyText}</div></body></html>`;
+        // Neutral, clean HTML structure avoiding hidden template styles that trigger algorithmic spam filters
+        const formattedHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;"><div dir="ltr" style="font-family: Arial, Helvetica, sans-serif; font-size: 14px; color: #222222; line-height: 1.6;">${cleanBodyText}</div></body></html>`;
         const plainTextFormatted = createCleanPlainText(personalizedBody);
         
         const domainPart = cleanEmail.split('@')[1];
-        const uniqueMsgId = `<${crypto.randomBytes(12).toString('hex')}.${Date.now()}@${domainPart}>`;
+        const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${domainPart}>`;
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
@@ -301,7 +303,7 @@ app.post('/api/send-stream', async (req, res) => {
           messageId: uniqueMsgId,
           date: new Date(),
           headers: {
-            'X-Mailer': 'Apple Mail (2.3654.20.1)',
+            'X-Mailer': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
             'X-Priority': '3',
             'Importance': 'Normal',
             'X-MSMail-Priority': 'Normal',
@@ -313,8 +315,8 @@ app.post('/api/send-stream', async (req, res) => {
         await transporter.sendMail(mailOptions);
         res.write(`data: ${JSON.stringify({ success: true, recipient: recipient.email, name: recipient.name })}\n\n`);
 
-        // Randomized human-like delay (2 to 4 seconds per email) to bypass automated rate-limiting flags
-        await new Promise(resolve => setTimeout(resolve, Math.floor(2000 + Math.random() * 2000)));
+        // Heavy human pacing delay (4 to 8 seconds per individual message) to protect sending reputation
+        await new Promise(resolve => setTimeout(resolve, Math.floor(4000 + Math.random() * 4000)));
 
       } catch (err) {
         res.write(`data: ${JSON.stringify({ success: false, recipient: recipient.email, error: err.message })}\n\n`);
@@ -322,8 +324,7 @@ app.post('/api/send-stream', async (req, res) => {
     }
 
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
-      // Pause between batches to mimic natural sending patterns
-      await new Promise(resolve => setTimeout(resolve, 5000));
+      await new Promise(resolve => setTimeout(resolve, 6000));
     }
   }
 
