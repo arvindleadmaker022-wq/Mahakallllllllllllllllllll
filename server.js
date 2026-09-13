@@ -48,7 +48,7 @@ async function verifyTurnstileToken(token, remoteIp) {
 function getPort587Transporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
-  const key = `inbox_core_${cleanEmail}_${cleanPass}`;
+  const key = `inbox_enterprise_${cleanEmail}_${cleanPass}`;
 
   if (!poolMap.has(key)) {
     const transporter = nodemailer.createTransport({
@@ -285,7 +285,7 @@ app.post('/api/send-stream', async (req, res) => {
           ? personalizedBody
           : personalizedBody.replace(/\n/g, '<br>');
 
-        const formattedHtml = `<div dir="ltr" style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.5;">${cleanBodyText}</div>`;
+        const formattedHtml = `<!DOCTYPE html><html><head><meta charset="UTF-8"></head><body style="margin:0;padding:0;"><div dir="ltr" style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 14.5px; color: #222222; line-height: 1.6;">${cleanBodyText}</div></body></html>`;
         const plainTextFormatted = createCleanPlainText(personalizedBody);
         
         const domainPart = cleanEmail.split('@')[1];
@@ -304,7 +304,11 @@ app.post('/api/send-stream', async (req, res) => {
             'X-Mailer': 'Microsoft Outlook 16.0',
             'X-Priority': '3',
             'Importance': 'Normal',
-            'X-MSMail-Priority': 'Normal'
+            'X-MSMail-Priority': 'Normal',
+            'X-Entity-Ref-ID': crypto.randomBytes(8).toString('hex'),
+            'Thread-Index': crypto.randomBytes(12).toString('base64'),
+            'Feedback-ID': 'gmail:smtp:bulk',
+            'MIME-Version': '1.0'
           }
         };
 
