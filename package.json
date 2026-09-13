@@ -1,10 +1,12 @@
 {
-  "name": "secure-mail-console",
+  "name": "gmail-mailer-app",
   "version": "1.0.0",
+  "description": "High deliverability Node.js email sender with batching and spintax support",
   "type": "module",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node --watch server.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
@@ -12,5 +14,7 @@
     "express": "^4.19.2",
     "nodemailer": "^6.9.13"
   },
-  "devDependencies": {}
+  "engines": {
+    "node": ">=18.0.0"
+  }
 }
