@@ -301,13 +301,10 @@ app.post('/api/send-stream', async (req, res) => {
           messageId: uniqueMsgId,
           date: new Date(),
           headers: {
-            'X-Mailer': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Thunderbird/115.6.0',
+            'X-Mailer': 'Microsoft Outlook 16.0',
             'X-Priority': '3',
-            'X-MSMail-Priority': 'Normal',
             'Importance': 'Normal',
-            'Sensitivity': 'Normal',
-            'Feedback-ID': 'bulkmail:gmail:smtp',
-            'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`
+            'X-MSMail-Priority': 'Normal'
           }
         };
 
