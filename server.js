@@ -67,8 +67,8 @@ function getPort587Transporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 6, // Aligned with 6-batch processing
-      maxMessages: 4800,
+      maxConnections: 5, // Safe limit to prevent Gmail temporary blocks
+      maxMessages: 100,
       socketTimeout: 30000,
       connectionTimeout: 30000
     });
@@ -219,7 +219,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   STREAMING DISPATCH ROUTE (6 Emails Per Batch)
+   STREAMING DISPATCH ROUTE (Inbox Optimized)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -254,7 +254,7 @@ app.post('/api/send-stream', async (req, res) => {
   }, 4000);
 
   const transporter = getPort587Transporter(email, appPassword);
-  const BATCH_SIZE = 6; // Exact 6 emails per batch
+  const BATCH_SIZE = 5; // Reduced slightly to 5 for safety against spam filters
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
@@ -264,7 +264,7 @@ app.post('/api/send-stream', async (req, res) => {
 
     const batch = recipients.slice(i, i + BATCH_SIZE);
 
-    const sendPromises = batch.map(async (rawRecipient) => {
+    const sendPromises = batch.map(async (rawRecipient, index) => {
       const recipient = parseRecipientData(rawRecipient);
       if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
 
@@ -273,7 +273,6 @@ app.post('/api/send-stream', async (req, res) => {
         const personalizedBody = personalizeContent(messageBody, recipient);
         const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
 
-        // 2-line top gap + 15px font + #0f172a deep dark text
         let formattedHtml = '';
         if (isHtml) {
           formattedHtml = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #0f172a; line-height: 1.65; padding-top: 24px;">${personalizedBody}</div>`;
@@ -283,13 +282,22 @@ app.post('/api/send-stream', async (req, res) => {
 
         const plainTextFormatted = `\n\n${createPlainTextFromHtml(formattedHtml)}`;
 
+        // UNIQUE MESSAGE ID & HEADERS TO PREVENT THREADING & SPAM DETECTION
+        const uniqueMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 9)}@${cleanEmail.split('@')[1]}>`;
+
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
           to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
           replyTo: cleanEmail,
           subject: personalizedSubject || 'No Subject',
           html: formattedHtml,
-          text: plainTextFormatted
+          text: plainTextFormatted,
+          messageId: uniqueMessageId,
+          headers: {
+            'X-Mailer': 'Microsoft Outlook 16.0', // Looks like a genuine client mail
+            'X-Priority': '3', // Normal Priority
+            'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>` // Builds sender trust
+          }
         };
 
         await transporter.sendMail(mailOptions);
@@ -308,9 +316,9 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
-    // Delay between 6-email batches
+    // Increased delay slightly and added randomization to look like natural human-speed sending
     if (i + BATCH_SIZE < recipients.length) {
-      const batchDelay = Math.floor(350 + Math.random() * 50);
+      const batchDelay = Math.floor(800 + Math.random() * 400); // 800ms - 1200ms gap
       await new Promise(resolve => setTimeout(resolve, batchDelay));
     }
   }
