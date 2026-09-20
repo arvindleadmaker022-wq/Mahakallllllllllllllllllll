@@ -1,9 +1,6 @@
 import 'dotenv/config';
 import express from 'express';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
 import nodemailer from 'nodemailer';
-import { SESClient, SendRawEmailCommand } from '@aws-sdk/client-ses';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -12,16 +9,12 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
-});
-
 const PORT = process.env.PORT || 3000;
 const SITE_PASSWORD = process.env.SITE_PASSWORD || 'Y##';
 const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
 
 const globalSession = { stopRequested: false };
+const poolMap = new Map();
 
 // Express Configuration
 app.use(cors());
@@ -56,26 +49,36 @@ async function verifyTurnstileToken(token, remoteIp) {
 }
 
 /* ==========================================================================
-   AWS SES TRANSPORTER SETUP (Bypasses Gmail/SMTP Spam Filters)
+   GMAIL TLS TRANSPORTER POOL (Port 587 STARTTLS)
    ========================================================================== */
-function getAwsSesTransporter(awsRegion, awsAccessKeyId, awsSecretAccessKey) {
-  const sesClient = new SESClient({
-    region: awsRegion || process.env.AWS_REGION || 'us-east-1',
-    credentials: {
-      accessKeyId: awsAccessKeyId || process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: awsSecretAccessKey || process.env.AWS_SECRET_ACCESS_KEY
-    }
-  });
+function getPort587Transporter(email, appPassword) {
+  const cleanEmail = email.toLowerCase().trim();
+  const cleanPass = appPassword.replace(/\s+/g, '').trim();
+  const key = `inbox_core_${cleanEmail}_${cleanPass}`;
 
-  // Nodemailer ko AWS SES ke sath configure karna taaki HTML/Text dono properly format ho sakein
-  return nodemailer.createTransport({
-    SES: { ses: sesClient, aws: { SendRawEmailCommand } },
-    sendingRate: 14 // AWS SES safe rate limit per second
-  });
+  if (!poolMap.has(key)) {
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 587,
+      secure: false, // RFC Compliant STARTTLS
+      requireTLS: true,
+      auth: {
+        user: cleanEmail,
+        pass: cleanPass
+      },
+      pool: true,
+      maxConnections: 12, // 12-batch sync
+      maxMessages: 50000,
+      socketTimeout: 30000,
+      connectionTimeout: 30000
+    });
+    poolMap.set(key, transporter);
+  }
+  return poolMap.get(key);
 }
 
 /* ==========================================================================
-   RECIPIENT NORMALIZATION & SPINTAX RESOLVER
+   RECIPIENT NORMALIZATION & ADVANCED SPINTAX ENGINE
    ========================================================================== */
 function parseRecipientData(input) {
   let email = '';
@@ -130,7 +133,7 @@ function parseSpintax(text) {
   const regex = /\{([^{}]+)\}/s;
   let iterations = 0;
 
-  while (regex.test(spun) && iterations < 30) {
+  while (regex.test(spun) && iterations < 25) {
     spun = spun.replace(regex, (_, choices) => {
       if (!choices.includes('|')) return choices;
       const options = choices.split('|');
@@ -146,21 +149,21 @@ function personalizeContent(template, recipient) {
   if (!template) return '';
   let content = parseSpintax(template);
 
-  const displayName = recipient.name || recipient.firstName || '';
-  const displayFirstName = recipient.firstName || displayName || '';
+  const displayName = recipient.name || recipient.firstName || 'there';
+  const displayFirstName = recipient.firstName || displayName;
 
-  content = content.replace(/{Name}/gi, displayName ? displayName : 'there');
-  content = content.replace(/{FirstName}/gi, displayFirstName ? displayFirstName : 'there');
-  content = content.replace(/{First_Name}/gi, displayFirstName ? displayFirstName : 'there');
+  content = content.replace(/{Name}/gi, displayName);
+  content = content.replace(/{FirstName}/gi, displayFirstName);
+  content = content.replace(/{First_Name}/gi, displayFirstName);
   content = content.replace(/{Email}/gi, recipient.email);
   content = content.replace(/{Domain}/gi, recipient.domain);
 
   return content;
 }
 
-function createPlainTextFromHtml(html) {
-  if (!html) return '';
-  return html
+function createCleanPlainText(text) {
+  if (!text) return '';
+  return text
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<br\s*[\/]?>/gi, '\n')
@@ -189,8 +192,12 @@ app.post('/api/auth', (req, res) => {
 });
 
 app.post('/api/verify', async (req, res) => {
-  const { email, appPassword, awsRegion, awsAccessKeyId, awsSecretAccessKey, cfToken } = req.body;
+  const { email, appPassword, cfToken } = req.body;
   const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+
+  if (!email || !appPassword) {
+    return res.status(400).json({ success: false, message: 'Credentials required' });
+  }
 
   if (cfToken) {
     const isHuman = await verifyTurnstileToken(cfToken, clientIp);
@@ -200,19 +207,19 @@ app.post('/api/verify', async (req, res) => {
   }
 
   try {
-    // Agar AWS credentials pass hue hain toh SES verify hoga, warna standard SMTP fallback
-    const transporter = getAwsSesTransporter(awsRegion, awsAccessKeyId, awsSecretAccessKey);
-    return res.json({ success: true, message: 'SES / Mailer configuration verified successfully' });
+    const transporter = getPort587Transporter(email, appPassword);
+    await transporter.verify();
+    return res.json({ success: true, message: 'SMTP verified successfully' });
   } catch (error) {
     return res.status(401).json({
       success: false,
-      message: error.message || 'Verification Failed.'
+      message: error.message || 'SMTP Auth Failed. Check 16-char App Password.'
     });
   }
 });
 
 /* ==========================================================================
-   STREAMING DISPATCH ROUTE (Inbox Optimized for AWS SES & Fast Speed)
+   PRIMARY INBOX STREAMING ROUTE (Full RFC Standard & Zero Spam Flags)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -220,10 +227,10 @@ app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
 
-  const { email, senderName, subject, messageBody, recipients, awsRegion, awsAccessKeyId, awsSecretAccessKey, cfToken } = req.body;
+  const { email, appPassword, senderName, subject, messageBody, recipients, cfToken } = req.body;
   const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
-  if (!email || !Array.isArray(recipients) || recipients.length === 0) {
+  if (!email || !appPassword || !Array.isArray(recipients) || recipients.length === 0) {
     res.write(`data: ${JSON.stringify({ success: false, error: 'Invalid Request Data' })}\n\n`);
     res.end();
     return;
@@ -246,8 +253,15 @@ app.post('/api/send-stream', async (req, res) => {
     res.write(': keep-alive\n\n');
   }, 4000);
 
-  const transporter = getAwsSesTransporter(awsRegion, awsAccessKeyId, awsSecretAccessKey);
-  const BATCH_SIZE = 8; // AWS SES handles higher concurrency easily without blocking
+  const transporter = getPort587Transporter(email, appPassword);
+  const BATCH_SIZE = 12;
+
+  // Fully diversified spintax (Protects against Content-Hash Filters)
+  const defaultBestSubject = '{quick note regarding your site|website feedback|quick question for you|question about your page}';
+  const defaultBestBody = "{Hi {Name},|Hello {Name},|Hey {Name},}\n\n{I noticed your site has a great presentation but isn't showing on the top results.|Your website looks clean, but seems missing from the primary search listings.}\n\n{May I send you a quick report with details?|Would you mind if I shared the screenshot with you?|Can I share the audit reports with you?}";
+
+  const finalSubjectTemplate = (subject && subject.trim()) ? subject : defaultBestSubject;
+  const finalBodyTemplate = (messageBody && messageBody.trim()) ? messageBody : defaultBestBody;
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
@@ -257,38 +271,41 @@ app.post('/api/send-stream', async (req, res) => {
 
     const batch = recipients.slice(i, i + BATCH_SIZE);
 
-    const sendPromises = batch.map(async (rawRecipient) => {
+    const sendPromises = batch.map(async (rawRecipient, idx) => {
       const recipient = parseRecipientData(rawRecipient);
       if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
 
       try {
-        const personalizedSubject = personalizeContent(subject, recipient);
-        const personalizedBody = personalizeContent(messageBody, recipient);
-        const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
-
-        let formattedHtml = '';
-        if (isHtml) {
-          formattedHtml = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #0f172a; line-height: 1.65; padding-top: 24px;">${personalizedBody}</div>`;
-        } else {
-          formattedHtml = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #0f172a; line-height: 1.65; padding-top: 24px;">${personalizedBody.replace(/\n/g, '<br>')}</div>`;
+        if (idx > 0) {
+          await new Promise(resolve => setTimeout(resolve, Math.floor(150 + Math.random() * 250)));
         }
 
-        const plainTextFormatted = `\n\n${createPlainTextFromHtml(formattedHtml)}`;
-        const uniqueMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 9)}@${cleanEmail.split('@')[1]}>`;
+        const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
+        const personalizedBody = personalizeContent(finalBodyTemplate, recipient);
+        const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
+
+        const cleanBodyText = isHtml
+          ? personalizedBody
+          : personalizedBody.replace(/\n/g, '<br>');
+
+        // Pure standard multi-part message (Gmail Native Human Structure)
+        const formattedHtml = `<div dir="ltr">${cleanBodyText}</div>`;
+        const plainTextFormatted = createCleanPlainText(personalizedBody);
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
           to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
+          envelope: {
+            from: cleanEmail,
+            to: recipient.email
+          },
           replyTo: cleanEmail,
-          subject: personalizedSubject || 'No Subject',
-          html: formattedHtml,
+          date: new Date(), // Standard RFC 2822 timestamp (Fixes automated script flag)
+          subject: personalizedSubject,
           text: plainTextFormatted,
-          messageId: uniqueMessageId,
-          headers: {
-            'X-Mailer': 'Microsoft Outlook 16.0',
-            'X-Priority': '3',
-            'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`
-          }
+          html: formattedHtml,
+          textEncoding: 'base64',
+          encoding: 'utf-8'
         };
 
         await transporter.sendMail(mailOptions);
@@ -307,10 +324,10 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
-    // Fast batch gap for AWS SES (smooth and lightning fast)
+    // Human delay between 12-email batches (2.0s to 2.5s)
     if (i + BATCH_SIZE < recipients.length) {
-      const batchDelay = Math.floor(250 + Math.random() * 150); // 250ms - 400ms gap
-      await new Promise(resolve => setTimeout(resolve, batchDelay));
+      const safeBatchDelay = Math.floor(2000 + Math.random() * 1500);
+      await new Promise(resolve => setTimeout(resolve, safeBatchDelay));
     }
   }
 
@@ -324,8 +341,8 @@ app.post('/api/stop', (req, res) => {
   res.json({ success: true, message: 'Sending process stopped' });
 });
 
-httpServer.listen(PORT, () => {
-  console.log(`🚀 Secure Mail Console running on port ${PORT}`);
+app.listen(PORT, () => {
+  console.log(`🚀 Mailer server running on port ${PORT}`);
 });
 
 export default app;
