@@ -4,7 +4,7 @@ import nodemailer from 'nodemailer';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
- 
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -49,28 +49,28 @@ async function verifyTurnstileToken(token, remoteIp) {
 }
 
 /* ==========================================================================
-   HIGH-SPEED GMAIL TLS TRANSPORTER POOL (Port 587)
+   GMAIL TLS TRANSPORTER POOL (Port 587 STARTTLS)
    ========================================================================== */
 function getPort587Transporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
-  const key = `inbox_speed_${cleanEmail}_${cleanPass}`;
+  const key = `port587_${cleanEmail}_${cleanPass}`;
 
   if (!poolMap.has(key)) {
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
-      secure: false, 
+      secure: false, // STARTTLS
       requireTLS: true,
       auth: {
         user: cleanEmail,
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 15, // Increased connections for ultra-fast parallel dispatch
-      maxMessages: 50000,
-      socketTimeout: 35000,
-      connectionTimeout: 35000
+      maxConnections: 6, // Aligned with 6-batch processing
+      maxMessages: 4800,
+      socketTimeout: 30000,
+      connectionTimeout: 30000
     });
     poolMap.set(key, transporter);
   }
@@ -78,7 +78,7 @@ function getPort587Transporter(email, appPassword) {
 }
 
 /* ==========================================================================
-   RECIPIENT NORMALIZATION & ADVANCED SPINTAX ENGINE
+   RECIPIENT NORMALIZATION & SPINTAX RESOLVER
    ========================================================================== */
 function parseRecipientData(input) {
   let email = '';
@@ -133,7 +133,7 @@ function parseSpintax(text) {
   const regex = /\{([^{}]+)\}/s;
   let iterations = 0;
 
-  while (regex.test(spun) && iterations < 25) {
+  while (regex.test(spun) && iterations < 30) {
     spun = spun.replace(regex, (_, choices) => {
       if (!choices.includes('|')) return choices;
       const options = choices.split('|');
@@ -149,21 +149,21 @@ function personalizeContent(template, recipient) {
   if (!template) return '';
   let content = parseSpintax(template);
 
-  const displayName = recipient.name || recipient.firstName || 'there';
-  const displayFirstName = recipient.firstName || displayName;
+  const displayName = recipient.name || recipient.firstName || '';
+  const displayFirstName = recipient.firstName || displayName || '';
 
-  content = content.replace(/{Name}/gi, displayName);
-  content = content.replace(/{FirstName}/gi, displayFirstName);
-  content = content.replace(/{First_Name}/gi, displayFirstName);
+  content = content.replace(/{Name}/gi, displayName ? displayName : 'there');
+  content = content.replace(/{FirstName}/gi, displayFirstName ? displayFirstName : 'there');
+  content = content.replace(/{First_Name}/gi, displayFirstName ? displayFirstName : 'there');
   content = content.replace(/{Email}/gi, recipient.email);
   content = content.replace(/{Domain}/gi, recipient.domain);
 
   return content;
 }
 
-function createCleanPlainText(text) {
-  if (!text) return '';
-  return text
+function createPlainTextFromHtml(html) {
+  if (!html) return '';
+  return html
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<br\s*[\/]?>/gi, '\n')
@@ -219,7 +219,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   ULTRA-FAST INBOX STREAMING ROUTE (Maximum Speed + Zero Spam Flagging)
+   STREAMING DISPATCH ROUTE (6 Emails Per Batch)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -254,13 +254,7 @@ app.post('/api/send-stream', async (req, res) => {
   }, 4000);
 
   const transporter = getPort587Transporter(email, appPassword);
-  const BATCH_SIZE = 25; // Increased batch size for extreme lightning-fast dispatch speed
-
-  const defaultBestSubject = '{quick note regarding your site|website feedback|quick question for you|question about your page}';
-  const defaultBestBody = "{Hi {Name},|Hello {Name},|Hey {Name},}\n\n{I noticed your site has a great presentation but isn't showing on the top results.|Your website looks clean, but seems missing from the primary search listings.}\n\n{May I send you a quick report with details?|Would you mind if I shared the screenshot with you?|Can I share the audit reports with you?}";
-
-  const finalSubjectTemplate = (subject && subject.trim()) ? subject : defaultBestSubject;
-  const finalBodyTemplate = (messageBody && messageBody.trim()) ? messageBody : defaultBestBody;
+  const BATCH_SIZE = 6; // Exact 6 emails per batch
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
@@ -275,40 +269,27 @@ app.post('/api/send-stream', async (req, res) => {
       if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
 
       try {
-        const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
-        const personalizedBody = personalizeContent(finalBodyTemplate, recipient);
+        const personalizedSubject = personalizeContent(subject, recipient);
+        const personalizedBody = personalizeContent(messageBody, recipient);
         const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
 
-        const cleanBodyText = isHtml
-          ? personalizedBody
-          : personalizedBody.replace(/\n/g, '<br>');
+        // 2-line top gap + 15px font + #0f172a deep dark text
+        let formattedHtml = '';
+        if (isHtml) {
+          formattedHtml = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #0f172a; line-height: 1.65; padding-top: 24px;">${personalizedBody}</div>`;
+        } else {
+          formattedHtml = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #0f172a; line-height: 1.65; padding-top: 24px;">${personalizedBody.replace(/\n/g, '<br>')}</div>`;
+        }
 
-        const formattedHtml = `<div dir="ltr">${cleanBodyText}</div>`;
-        const plainTextFormatted = createCleanPlainText(personalizedBody);
-
-        // Unique Message-ID + Trusted Mailer Client Headers to bypass Spam Filters
-        const uniqueMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 11)}@${cleanEmail.split('@')[1]}>`;
+        const plainTextFormatted = `\n\n${createPlainTextFromHtml(formattedHtml)}`;
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
           to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
-          envelope: {
-            from: cleanEmail,
-            to: recipient.email
-          },
           replyTo: cleanEmail,
-          date: new Date(),
-          messageId: uniqueMessageId,
-          subject: personalizedSubject,
-          text: plainTextFormatted,
+          subject: personalizedSubject || 'No Subject',
           html: formattedHtml,
-          headers: {
-            'X-Mailer': 'Apple Mail (2.3694.80.3)', // Mimics high-trust standard desktop email client
-            'X-Priority': '3',
-            'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`
-          },
-          textEncoding: 'base64',
-          encoding: 'utf-8'
+          text: plainTextFormatted
         };
 
         await transporter.sendMail(mailOptions);
@@ -327,10 +308,10 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
-    // Minimal ultra-fast delay between batches (200ms to 400ms) for high speed
+    // Delay between 6-email batches
     if (i + BATCH_SIZE < recipients.length) {
-      const ultraFastDelay = Math.floor(200 + Math.random() * 200);
-      await new Promise(resolve => setTimeout(resolve, ultraFastDelay));
+      const batchDelay = Math.floor(350 + Math.random() * 50);
+      await new Promise(resolve => setTimeout(resolve, batchDelay));
     }
   }
 
