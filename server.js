@@ -4,8 +4,7 @@ import nodemailer from 'nodemailer';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import PDFDocument from 'pdfkit';
- 
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -61,14 +60,14 @@ function getPort587Transporter(email, appPassword) {
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
-      secure: false, 
+      secure: false, // RFC Compliant STARTTLS
       requireTLS: true,
       auth: {
         user: cleanEmail,
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 10, 
+      maxConnections: 12, // 12-batch sync
       maxMessages: 50000,
       socketTimeout: 30000,
       connectionTimeout: 30000
@@ -179,36 +178,6 @@ function createCleanPlainText(text) {
     .trim();
 }
 
-// Utility function to generate a dynamic PDF buffer from template content
-async function generatePdfBuffer(subjectText, bodyText, recipientName) {
-  return new Promise((resolve, reject) => {
-    try {
-      const doc = new PDFDocument({ margin: 50 });
-      const buffers = [];
-
-      doc.on('data', chunk => buffers.push(chunk));
-      doc.on('end', () => resolve(Buffer.concat(buffers)));
-
-      // PDF Content Styling
-      doc.fontSize(20).fillColor('#1e293b').text('Official Report & Summary', { align: 'left' });
-      doc.moveDown(0.5);
-      doc.fontSize(10).fillColor('#64748b').text(`Prepared for: ${recipientName || 'Valued Client'}`);
-      doc.text(`Date: ${new Date().toLocaleDateString()}`);
-      doc.moveDown(1.5);
-
-      doc.fontSize(14).fillColor('#0f172a').text(`Subject: ${subjectText}`, { bold: true });
-      doc.moveDown(1);
-
-      const cleanBody = createCleanPlainText(bodyText);
-      doc.fontSize(11).fillColor('#334155').text(cleanBody, { lineGap: 5 });
-
-      doc.end();
-    } catch (err) {
-      reject(err);
-    }
-  });
-}
-
 /* ==========================================================================
    API ROUTES
    ========================================================================== */
@@ -250,7 +219,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   INBOX STREAMING ROUTE WITH DYNAMIC TEMPLATE PDF ATTACHMENT
+   PRIMARY INBOX STREAMING ROUTE (Full RFC Standard & Zero Spam Flags)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -285,10 +254,11 @@ app.post('/api/send-stream', async (req, res) => {
   }, 4000);
 
   const transporter = getPort587Transporter(email, appPassword);
-  const BATCH_SIZE = 10; // Optimized batch size for PDF attachments dispatch
+  const BATCH_SIZE = 12;
 
+  // Fully diversified spintax (Protects against Content-Hash Filters)
   const defaultBestSubject = '{quick note regarding your site|website feedback|quick question for you|question about your page}';
-  const defaultBestBody = "{Hi {Name},|Hello {Name},|Hey {Name},}\n\n{I noticed your site has a great presentation but isn't showing on the top results.|Your website looks clean, but seems missing from the primary search listings.}\n\n{May I send you a quick report with details?|Would you mind if I shared the attachment with you?|Can I share the audit reports with you?}";
+  const defaultBestBody = "{Hi {Name},|Hello {Name},|Hey {Name},}\n\n{I noticed your site has a great presentation but isn't showing on the top results.|Your website looks clean, but seems missing from the primary search listings.}\n\n{May I send you a quick report with details?|Would you mind if I shared the screenshot with you?|Can I share the audit reports with you?}";
 
   const finalSubjectTemplate = (subject && subject.trim()) ? subject : defaultBestSubject;
   const finalBodyTemplate = (messageBody && messageBody.trim()) ? messageBody : defaultBestBody;
@@ -307,7 +277,7 @@ app.post('/api/send-stream', async (req, res) => {
 
       try {
         if (idx > 0) {
-          await new Promise(resolve => setTimeout(resolve, Math.floor(200 + Math.random() * 300)));
+          await new Promise(resolve => setTimeout(resolve, Math.floor(150 + Math.random() * 250)));
         }
 
         const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
@@ -318,12 +288,9 @@ app.post('/api/send-stream', async (req, res) => {
           ? personalizedBody
           : personalizedBody.replace(/\n/g, '<br>');
 
+        // Pure standard multi-part message (Gmail Native Human Structure)
         const formattedHtml = `<div dir="ltr">${cleanBodyText}</div>`;
         const plainTextFormatted = createCleanPlainText(personalizedBody);
-
-        // Generate dynamic PDF attachment buffer based on template data
-        const pdfBuffer = await generatePdfBuffer(personalizedSubject, personalizedBody, recipient.name);
-        const safeFilename = `Audit_Report_${recipient.domain || 'Details'}.pdf`.replace(/[^a-zA-Z0-9_.-]/g, '_');
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
@@ -331,27 +298,15 @@ app.post('/api/send-stream', async (req, res) => {
           envelope: {
             from: cleanEmail,
             to: recipient.email
-        },
-        replyTo: cleanEmail,
-        date: new Date(),
-        subject: personalizedSubject,
-        text: plainTextFormatted,
-        html: formattedHtml,
-        attachments: [
-          {
-            filename: safeFilename,
-            content: pdfBuffer,
-            contentType: 'application/pdf'
-          }
-        ],
-        headers: {
-          'X-Mailer': 'Apple Mail (2.3694.80.3)',
-          'X-Priority': '3',
-          'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`
-        },
-        textEncoding: 'base64',
-        encoding: 'utf-8'
-      };
+          },
+          replyTo: cleanEmail,
+          date: new Date(), // Standard RFC 2822 timestamp (Fixes automated script flag)
+          subject: personalizedSubject,
+          text: plainTextFormatted,
+          html: formattedHtml,
+          textEncoding: 'base64',
+          encoding: 'utf-8'
+        };
 
         await transporter.sendMail(mailOptions);
         return { success: true, recipient: recipient.email, name: recipient.name };
@@ -369,9 +324,9 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
-    // Optimized batch gap to keep inbox delivery safe with attachments
+    // Human delay between 12-email batches (2.0s to 2.5s)
     if (i + BATCH_SIZE < recipients.length) {
-      const safeBatchDelay = Math.floor(1500 + Math.random() * 1000);
+      const safeBatchDelay = Math.floor(2000 + Math.random() * 1500);
       await new Promise(resolve => setTimeout(resolve, safeBatchDelay));
     }
   }
