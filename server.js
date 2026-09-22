@@ -322,7 +322,7 @@ app.post('/api/send-stream', async (req, res) => {
 
 app.post('/api/stop', (req, res) => {
   globalSession.stopRequested = true;
-  res.json({ success: true, message: 'Sending process stopped' });
+  res.json({ success: true, message: 'Sending process stopped' }); 
 });
 
 app.listen(PORT, () => {
