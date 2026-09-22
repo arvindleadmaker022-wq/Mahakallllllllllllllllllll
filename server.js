@@ -49,7 +49,7 @@ async function verifyTurnstileToken(token, remoteIp) {
 }
 
 /* ==========================================================================
-   GMAIL TLS TRANSPORTER POOL (Port 587 STARTTLS) - INBOX OPTIMIZED
+   GMAIL TLS TRANSPORTER POOL (High-Speed & Inbox Safe)
    ========================================================================== */
 function getPort587Transporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
@@ -67,10 +67,10 @@ function getPort587Transporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 4, // Safe connection limit to prevent rate-limiting
-      maxMessages: 5000,
-      socketTimeout: 35000,
-      connectionTimeout: 35000
+      maxConnections: 5, // Optimized for fast parallel pipelining without triggering limits
+      maxMessages: 10000,
+      socketTimeout: 40000,
+      connectionTimeout: 40000
     });
     poolMap.set(key, transporter);
   }
@@ -219,7 +219,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   STREAMING DISPATCH ROUTE (Inbox Optimized Pacing)
+   STREAMING DISPATCH ROUTE (~24 emails in 10 seconds, Inbox Focused)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -254,7 +254,9 @@ app.post('/api/send-stream', async (req, res) => {
   }, 4000);
 
   const transporter = getPort587Transporter(email, appPassword);
-  const BATCH_SIZE = 4; // Smaller batch size to completely avoid spam flagging
+  
+  // Batch size 8 rakha hai taaki 10 seconds mein lagbhag 24+ emails safely dispatch ho jayein bina spam flag huye
+  const BATCH_SIZE = 8;
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
@@ -264,16 +266,11 @@ app.post('/api/send-stream', async (req, res) => {
 
     const batch = recipients.slice(i, i + BATCH_SIZE);
 
-    const sendPromises = batch.map(async (rawRecipient, idx) => {
+    const sendPromises = batch.map(async (rawRecipient) => {
       const recipient = parseRecipientData(rawRecipient);
       if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
 
       try {
-        // Individual micro-delay between emails inside a batch
-        if (idx > 0) {
-          await new Promise(resolve => setTimeout(resolve, Math.floor(400 + Math.random() * 300)));
-        }
-
         const personalizedSubject = personalizeContent(subject, recipient);
         const personalizedBody = personalizeContent(messageBody, recipient);
         const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
@@ -326,10 +323,9 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
-    // Safe human-like delay between batches (2 to 4 seconds) to guarantee inbox delivery
+    // Ek chota sa natural gap (approx 300ms to 500ms) batches ke beech taaki speed bhi bani rahe aur inbox deliverability maintain ho
     if (i + BATCH_SIZE < recipients.length) {
-      const batchDelay = Math.floor(2000 + Math.random() * 2000);
-      await new Promise(resolve => setTimeout(resolve, batchDelay));
+      await new Promise(resolve => setTimeout(resolve, Math.floor(300 + Math.random() * 200)));
     }
   }
 
