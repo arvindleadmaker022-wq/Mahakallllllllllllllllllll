@@ -66,9 +66,11 @@ function getPort587Transporter(email, appPassword) {
         user: cleanEmail,
         pass: cleanPass
       },
-      pool: false, // Disabling pooling ensures fresh socket handshake for every clean delivery
-      socketTimeout: 45000,
-      connectionTimeout: 45000
+      pool: true,
+      maxConnections: 6,
+      maxMessages: 5000,
+      socketTimeout: 35000,
+      connectionTimeout: 35000
     });
     poolMap.set(key, transporter);
   }
@@ -217,7 +219,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   STREAMING DISPATCH ROUTE (Strict 9-10 Seconds Pacing for 100% Inbox)
+   STREAMING DISPATCH ROUTE (Optimized: ~24 emails per 10 seconds)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -251,7 +253,9 @@ app.post('/api/send-stream', async (req, res) => {
     res.write(': keep-alive\n\n');
   }, 4000);
 
-  // Strictly sequential loop with 9 to 10 seconds gap between each email dispatch
+  const transporter = getPort587Transporter(email, appPassword);
+
+  // Sequential loop with ~415ms delay per email so that 24 emails process in ~10 seconds
   for (let i = 0; i < recipients.length; i++) {
     if (globalSession.stopRequested) {
       res.write(`data: ${JSON.stringify({ success: false, error: 'Stopped by User' })}\n\n`);
@@ -267,10 +271,10 @@ app.post('/api/send-stream', async (req, res) => {
     }
 
     try {
-      // 9 to 10 seconds precise delay between emails (9000ms to 10000ms)
+      // ~400ms to 450ms delay per email (~24 emails per 10 seconds throughput)
       if (i > 0) {
-        const humanDelay = Math.floor(9000 + Math.random() * 1000);
-        await new Promise(resolve => setTimeout(resolve, humanDelay));
+        const speedDelay = Math.floor(400 + Math.random() * 50);
+        await new Promise(resolve => setTimeout(resolve, speedDelay));
       }
 
       const personalizedSubject = personalizeContent(subject, recipient);
@@ -309,9 +313,7 @@ app.post('/api/send-stream', async (req, res) => {
         encoding: 'utf-8'
       };
 
-      const transporter = getPort587Transporter(email, appPassword);
       await transporter.sendMail(mailOptions);
-
       res.write(`data: ${JSON.stringify({ success: true, recipient: recipient.email, name: recipient.name })}\n\n`);
 
     } catch (err) {
