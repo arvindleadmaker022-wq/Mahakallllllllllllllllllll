@@ -49,7 +49,7 @@ async function verifyTurnstileToken(token, remoteIp) {
 }
 
 /* ==========================================================================
-   GMAIL TLS TRANSPORTER CONFIGURATION (Port 587 STARTTLS)
+   GMAIL TLS TRANSPORTER POOL (Port 587 STARTTLS) - INBOX OPTIMIZED
    ========================================================================== */
 function getPort587Transporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
@@ -67,7 +67,7 @@ function getPort587Transporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 6,
+      maxConnections: 4, // Safe connection limit to prevent rate-limiting
       maxMessages: 5000,
       socketTimeout: 35000,
       connectionTimeout: 35000
@@ -219,7 +219,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   STREAMING DISPATCH ROUTE (Optimized: ~24 emails per 10 seconds)
+   STREAMING DISPATCH ROUTE (Inbox Optimized Pacing)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -254,70 +254,82 @@ app.post('/api/send-stream', async (req, res) => {
   }, 4000);
 
   const transporter = getPort587Transporter(email, appPassword);
+  const BATCH_SIZE = 4; // Smaller batch size to completely avoid spam flagging
 
-  // Sequential loop with ~415ms delay per email so that 24 emails process in ~10 seconds
-  for (let i = 0; i < recipients.length; i++) {
+  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
       res.write(`data: ${JSON.stringify({ success: false, error: 'Stopped by User' })}\n\n`);
       break;
     }
 
-    const rawRecipient = recipients[i];
-    const recipient = parseRecipientData(rawRecipient);
+    const batch = recipients.slice(i, i + BATCH_SIZE);
 
-    if (!recipient.email) {
-      res.write(`data: ${JSON.stringify({ success: false, recipient: '', error: 'Invalid Email' })}\n\n`);
-      continue;
+    const sendPromises = batch.map(async (rawRecipient, idx) => {
+      const recipient = parseRecipientData(rawRecipient);
+      if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
+
+      try {
+        // Individual micro-delay between emails inside a batch
+        if (idx > 0) {
+          await new Promise(resolve => setTimeout(resolve, Math.floor(400 + Math.random() * 300)));
+        }
+
+        const personalizedSubject = personalizeContent(subject, recipient);
+        const personalizedBody = personalizeContent(messageBody, recipient);
+        const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
+
+        let formattedHtml = '';
+        if (isHtml) {
+          formattedHtml = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #0f172a; line-height: 1.65; padding-top: 24px;">${personalizedBody}</div>`;
+        } else {
+          formattedHtml = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #0f172a; line-height: 1.65; padding-top: 24px;">${personalizedBody.replace(/\n/g, '<br>')}</div>`;
+        }
+
+        const plainTextFormatted = createPlainTextFromHtml(formattedHtml);
+        const uniqueMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 11)}@${cleanEmail.split('@')[1]}>`;
+
+        const mailOptions = {
+          from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
+          to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
+          envelope: {
+            from: cleanEmail,
+            to: recipient.email
+          },
+          replyTo: cleanEmail,
+          date: new Date(),
+          messageId: uniqueMessageId,
+          subject: personalizedSubject || 'No Subject',
+          html: formattedHtml,
+          text: plainTextFormatted,
+          headers: {
+            'X-Mailer': 'Apple Mail (18.2)',
+            'X-Priority': '3',
+            'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`
+          },
+          textEncoding: 'base64',
+          encoding: 'utf-8'
+        };
+
+        await transporter.sendMail(mailOptions);
+        return { success: true, recipient: recipient.email, name: recipient.name };
+
+      } catch (err) {
+        return { success: false, recipient: recipient.email, error: err.message };
+      }
+    });
+
+    const results = await Promise.allSettled(sendPromises);
+
+    for (const resItem of results) {
+      if (resItem.status === 'fulfilled' && resItem.value.recipient) {
+        res.write(`data: ${JSON.stringify(resItem.value)}\n\n`);
+      }
     }
 
-    try {
-      // ~400ms to 450ms delay per email (~24 emails per 10 seconds throughput)
-      if (i > 0) {
-        const speedDelay = Math.floor(400 + Math.random() * 50);
-        await new Promise(resolve => setTimeout(resolve, speedDelay));
-      }
-
-      const personalizedSubject = personalizeContent(subject, recipient);
-      const personalizedBody = personalizeContent(messageBody, recipient);
-      const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
-
-      let formattedHtml = '';
-      if (isHtml) {
-        formattedHtml = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #0f172a; line-height: 1.65; padding-top: 24px;">${personalizedBody}</div>`;
-      } else {
-        formattedHtml = `<div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 15px; color: #0f172a; line-height: 1.65; padding-top: 24px;">${personalizedBody.replace(/\n/g, '<br>')}</div>`;
-      }
-
-      const plainTextFormatted = createPlainTextFromHtml(formattedHtml);
-      const uniqueMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 11)}@${cleanEmail.split('@')[1]}>`;
-
-      const mailOptions = {
-        from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
-        to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
-        envelope: {
-          from: cleanEmail,
-          to: recipient.email
-        },
-        replyTo: cleanEmail,
-        date: new Date(),
-        messageId: uniqueMessageId,
-        subject: personalizedSubject || 'No Subject',
-        html: formattedHtml,
-        text: plainTextFormatted,
-        headers: {
-          'X-Mailer': 'Apple Mail (18.2)',
-          'X-Priority': '3',
-          'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`
-        },
-        textEncoding: 'base64',
-        encoding: 'utf-8'
-      };
-
-      await transporter.sendMail(mailOptions);
-      res.write(`data: ${JSON.stringify({ success: true, recipient: recipient.email, name: recipient.name })}\n\n`);
-
-    } catch (err) {
-      res.write(`data: ${JSON.stringify({ success: false, recipient: recipient.email, error: err.message })}\n\n`);
+    // Safe human-like delay between batches (2 to 4 seconds) to guarantee inbox delivery
+    if (i + BATCH_SIZE < recipients.length) {
+      const batchDelay = Math.floor(2000 + Math.random() * 2000);
+      await new Promise(resolve => setTimeout(resolve, batchDelay));
     }
   }
 
