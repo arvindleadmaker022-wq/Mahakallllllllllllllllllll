@@ -293,7 +293,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function finishSendingUI() { 
+    function finishSendingUI() {
         sendBtn.disabled = false;
         sendBtn.innerHTML = '<i class="fa-solid fa-paper-plane"></i> Send All';
         stopBtn.classList.add('hidden');
