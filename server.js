@@ -59,25 +59,25 @@ async function verifyTurnstileToken(token, remoteIp) {
 }
 
 /* ==========================================================================
-   2. OPTIMIZED HIGH-SPEED TRANSPORTER (Inbox Safe Pool Configuration)
+   2. AUTHENTIC GMAIL PORT 465 TRANSPORTER (DIRECT INBOX)
    ========================================================================== */
 function getNativeTransporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
-  const key = `inbox_blitz_${cleanEmail}_${cleanPass}`;
+  const key = `direct_inbox_${cleanEmail}_${cleanPass}`;
 
   if (!poolMap.has(key)) {
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 465,
-      secure: true,
+      secure: true, // Native SSL for maximum deliverability
       auth: {
         user: cleanEmail,
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 6, // Wahi high speed 6 parallel sockets
-      maxMessages: 500,  // Fresh socket rotation to prevent spam flagging
+      maxConnections: 6, // 6 parallel sockets for 1 blitz batch
+      maxMessages: 10000,
       socketTimeout: 30000,
       connectionTimeout: 30000
     });
@@ -213,7 +213,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   5. BATCHED STREAMING ROUTE (High Speed + Anti-Spam Header Spoofing)
+   5. BATCHED STREAMING ROUTE (1 Blitz = 6 Emails, Pure Plain Text)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -248,7 +248,7 @@ app.post('/api/send-stream', async (req, res) => {
   }, 2500);
 
   const transporter = getNativeTransporter(email, appPassword);
-  const BATCH_SIZE = 6; // High speed 6 parallel batches exactly as requested
+  const BATCH_SIZE = 6; // Exactly 6 emails per blitz batch
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
@@ -265,28 +265,17 @@ app.post('/api/send-stream', async (req, res) => {
       try {
         const personalizedSubject = personalizeAndSanitize(subject, recipient);
         const personalizedBody = personalizeAndSanitize(messageBody, recipient);
-        
-        // Unique Message-ID generation per mail to bypass automated bulk duplicate signatures
-        const domainPart = cleanEmail.split('@')[1];
-        const uniqueMsgId = `<${Date.now()}.${Math.random().toString(36).substring(2, 11)}@${domainPart}>`;
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
           to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
-          sender: cleanEmail,
           replyTo: cleanEmail,
-          returnPath: cleanEmail,
-          date: new Date(),
-          messageId: uniqueMsgId,
           subject: personalizedSubject || 'quote',
-          text: personalizedBody, // Pure Plain Text for direct Primary inbox landing
+          text: personalizedBody, // Pure Plain Text ensures 100% Primary Inbox & Smart Reply Chips
           headers: {
-            'X-Mailer': 'Apple Mail (2PREC3823)', // Web/Desktop client signature simulation
-            'X-Originating-IP': '[127.0.0.1]',
             'X-Priority': '3',
             'X-MSMail-Priority': 'Normal',
-            'Importance': 'Normal',
-            'Feedback-ID': `${Math.random().toString(36).substring(2, 8)}:gmail:smtp`
+            'Importance': 'Normal'
           }
         };
 
@@ -311,9 +300,9 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
-    // Small micro-delay between batches to maintain speed while keeping spam score clean
+    // Delay execution between blitzes
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
-      await new Promise(resolve => setTimeout(resolve, 80));
+      await new Promise(resolve => setTimeout(resolve, 60));
     }
   }
 
