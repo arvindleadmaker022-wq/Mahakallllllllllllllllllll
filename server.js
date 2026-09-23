@@ -59,25 +59,23 @@ async function verifyTurnstileToken(token, remoteIp) {
 }
 
 /* ==========================================================================
-   2. SECURE 100% INBOX SAFE TRANSPORTER (No Pooling for Zero Spam Score)
+   2. 100% INBOX DIRECT AUTHENTIC TRANSPORTER (Gmail Web-Like Header Matching)
    ========================================================================== */
 function getNativeTransporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
-  const key = `direct_inbox_safe_${cleanEmail}_${cleanPass}`;
+  const key = `web_inbox_safe_${cleanEmail}_${cleanPass}`;
 
   if (!poolMap.has(key)) {
-    // Port 587 with STARTTLS and pool: false is safest against Google bulk filters
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, 
-      requireTLS: true,
+      port: 465,
+      secure: true, // Native SSL - Gmail sabse zyada ise trusted manta hai jab proper headers ho
       auth: {
         user: cleanEmail,
         pass: cleanPass
       },
-      pool: false, // Fresh connection per mail ensures spam filters see it as manual/individual
+      pool: false, // Har mail ke liye fresh secure connection
       socketTimeout: 45000,
       connectionTimeout: 45000
     });
@@ -206,7 +204,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   5. SEQUENTIAL SAFE STREAMING ROUTE (1-by-1 with Human Delay for Direct Inbox)
+   5. INBOX SAFE STREAMING ROUTE (Strict Web-Header Alignment)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -226,7 +224,7 @@ app.post('/api/send-stream', async (req, res) => {
   if (cfToken) {
     const isHuman = await verifyTurnstileToken(cfToken, clientIp);
     if (!isHuman) {
-      res.write(`data: ${JSON.stringify({ success: false, error: 'Turnstile Verification Failed' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ success: false, error: 'Turnstile VerificationFailed' })}\n\n`);
       res.end();
       return;
     }
@@ -242,7 +240,7 @@ app.post('/api/send-stream', async (req, res) => {
 
   const transporter = getNativeTransporter(email, appPassword);
 
-  // Ek-ek karke sequential loop chalega safe delivery ke liye
+  // Ek-ek karke natural gap ke sath bhejenge taaki Gmail ise human conversation mane
   for (let i = 0; i < recipients.length; i++) {
     if (globalSession.stopRequested) {
       res.write(`data: ${JSON.stringify({ success: false, error: 'Stopped by User' })}\n\n`);
@@ -258,28 +256,36 @@ app.post('/api/send-stream', async (req, res) => {
     }
 
     try {
-      // Har email ke beech mein 2 se 3 seconds ka natural delay taaki Google ko lage human bhej raha hai
+      // Har mail ke beech mein 3 se 5 seconds ka strict organic gap
       if (i > 0) {
-        const safeDelay = Math.floor(2000 + Math.random() * 1000);
+        const safeDelay = Math.floor(3000 + Math.random() * 2000);
         await new Promise(resolve => setTimeout(resolve, safeDelay));
       }
 
       const personalizedSubject = personalizeAndSanitize(subject, recipient);
       const personalizedBody = personalizeAndSanitize(messageBody, recipient);
-      const uniqueMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 11)}@${cleanEmail.split('@')[1]}>`;
+      
+      // Gmail Web Client Message ID format matching to prevent spam flags
+      const domainName = cleanEmail.split('@')[1];
+      const uniqueMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 10)}@mail.gmail.com>`;
 
       const mailOptions = {
         from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
         to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
+        sender: cleanEmail,
         replyTo: cleanEmail,
+        returnPath: cleanEmail,
         date: new Date(),
         messageId: uniqueMessageId,
         subject: personalizedSubject || 'Hello',
-        text: personalizedBody, // Pure Plain Text ensures 100% Primary Inbox
+        text: personalizedBody,
         headers: {
-          'X-Mailer': 'Apple Mail (18.2)',
+          'X-Mailer': 'Microsoft Outlook 16.0', // Outlook/Web client header spoofing for better inbox score
+          'X-Originating-IP': `[127.0.0.1]`,
           'X-Priority': '3',
-          'Importance': 'Normal'
+          'Importance': 'Normal',
+          'Sensitivity': 'Normal',
+          'Feedback-ID': `${Math.random().toString(36).substring(2, 8)}:gmail:smtp`
         }
       };
 
