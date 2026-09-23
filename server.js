@@ -59,25 +59,27 @@ async function verifyTurnstileToken(token, remoteIp) {
 }
 
 /* ==========================================================================
-   2. 100% INBOX DIRECT AUTHENTIC TRANSPORTER (Gmail Web-Like Header Matching)
+   2. OPTIMIZED HIGH-SPEED TRANSPORTER (Inbox Safe Pool Configuration)
    ========================================================================== */
 function getNativeTransporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
-  const key = `web_inbox_safe_${cleanEmail}_${cleanPass}`;
+  const key = `inbox_blitz_${cleanEmail}_${cleanPass}`;
 
   if (!poolMap.has(key)) {
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 465,
-      secure: true, // Native SSL - Gmail sabse zyada ise trusted manta hai jab proper headers ho
+      secure: true,
       auth: {
         user: cleanEmail,
         pass: cleanPass
       },
-      pool: false, // Har mail ke liye fresh secure connection
-      socketTimeout: 45000,
-      connectionTimeout: 45000
+      pool: true,
+      maxConnections: 6, // Wahi high speed 6 parallel sockets
+      maxMessages: 500,  // Fresh socket rotation to prevent spam flagging
+      socketTimeout: 30000,
+      connectionTimeout: 30000
     });
     poolMap.set(key, transporter);
   }
@@ -164,6 +166,13 @@ function personalizeAndSanitize(template, recipient) {
   content = content.replace(/{Email}/gi, recipient.email);
   content = content.replace(/{Domain}/gi, recipient.domain);
 
+  // Auto-strip links and unsubscribe footers for Primary Inbox landing
+  content = content.replace(/<a\b[^>]*>(.*?)<\/a>/gi, '$1');
+  content = content.replace(/https?:\/\/[^\s]+/gi, '');
+  content = content.replace(/www\.[^\s]+/gi, '');
+  content = content.replace(/unsubscribe/gi, '');
+  content = content.replace(/opt-out/gi, '');
+
   return content.trim();
 }
 
@@ -204,7 +213,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   5. INBOX SAFE STREAMING ROUTE (Strict Web-Header Alignment)
+   5. BATCHED STREAMING ROUTE (High Speed + Anti-Spam Header Spoofing)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -224,7 +233,7 @@ app.post('/api/send-stream', async (req, res) => {
   if (cfToken) {
     const isHuman = await verifyTurnstileToken(cfToken, clientIp);
     if (!isHuman) {
-      res.write(`data: ${JSON.stringify({ success: false, error: 'Turnstile VerificationFailed' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ success: false, error: 'Turnstile Verification Failed' })}\n\n`);
       res.end();
       return;
     }
@@ -239,66 +248,72 @@ app.post('/api/send-stream', async (req, res) => {
   }, 2500);
 
   const transporter = getNativeTransporter(email, appPassword);
+  const BATCH_SIZE = 6; // High speed 6 parallel batches exactly as requested
 
-  // Ek-ek karke natural gap ke sath bhejenge taaki Gmail ise human conversation mane
-  for (let i = 0; i < recipients.length; i++) {
+  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
       res.write(`data: ${JSON.stringify({ success: false, error: 'Stopped by User' })}\n\n`);
       break;
     }
 
-    const rawRecipient = recipients[i];
-    const recipient = parseRecipientData(rawRecipient);
+    const batch = recipients.slice(i, i + BATCH_SIZE);
 
-    if (!recipient.email) {
-      res.write(`data: ${JSON.stringify({ success: false, recipient: '', error: 'Invalid Email' })}\n\n`);
-      continue;
+    const sendPromises = batch.map(async (rawRecipient) => {
+      const recipient = parseRecipientData(rawRecipient);
+      if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
+
+      try {
+        const personalizedSubject = personalizeAndSanitize(subject, recipient);
+        const personalizedBody = personalizeAndSanitize(messageBody, recipient);
+        
+        // Unique Message-ID generation per mail to bypass automated bulk duplicate signatures
+        const domainPart = cleanEmail.split('@')[1];
+        const uniqueMsgId = `<${Date.now()}.${Math.random().toString(36).substring(2, 11)}@${domainPart}>`;
+
+        const mailOptions = {
+          from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
+          to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
+          sender: cleanEmail,
+          replyTo: cleanEmail,
+          returnPath: cleanEmail,
+          date: new Date(),
+          messageId: uniqueMsgId,
+          subject: personalizedSubject || 'quote',
+          text: personalizedBody, // Pure Plain Text for direct Primary inbox landing
+          headers: {
+            'X-Mailer': 'Apple Mail (2PREC3823)', // Web/Desktop client signature simulation
+            'X-Originating-IP': '[127.0.0.1]',
+            'X-Priority': '3',
+            'X-MSMail-Priority': 'Normal',
+            'Importance': 'Normal',
+            'Feedback-ID': `${Math.random().toString(36).substring(2, 8)}:gmail:smtp`
+          }
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        const payload = { success: true, recipient: recipient.email, name: recipient.name };
+        io.emit('mail_sent', payload);
+        return payload;
+
+      } catch (err) {
+        const errPayload = { success: false, recipient: recipient.email, error: err.message };
+        io.emit('mail_error', errPayload);
+        return errPayload;
+      }
+    });
+
+    const results = await Promise.allSettled(sendPromises);
+
+    for (const resItem of results) {
+      if (resItem.status === 'fulfilled' && resItem.value.recipient) {
+        res.write(`data: ${JSON.stringify(resItem.value)}\n\n`);
+      }
     }
 
-    try {
-      // Har mail ke beech mein 0.9 se 1 seconds ka strict organic gap
-      if (i > 0) {
-        const safeDelay = Math.floor(250 + Math.random() * 150);
-        await new Promise(resolve => setTimeout(resolve, safeDelay));
-      }
-
-      const personalizedSubject = personalizeAndSanitize(subject, recipient);
-      const personalizedBody = personalizeAndSanitize(messageBody, recipient);
-      
-      // Gmail Web Client Message ID format matching to prevent spam flags
-      const domainName = cleanEmail.split('@')[1];
-      const uniqueMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 10)}@mail.gmail.com>`;
-
-      const mailOptions = {
-        from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
-        to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
-        sender: cleanEmail,
-        replyTo: cleanEmail,
-        returnPath: cleanEmail,
-        date: new Date(),
-        messageId: uniqueMessageId,
-        subject: personalizedSubject || 'Hello',
-        text: personalizedBody,
-        headers: {
-          'X-Mailer': 'Microsoft Outlook 16.0', // Outlook/Web client header spoofing for better inbox score
-          'X-Originating-IP': `[127.0.0.1]`,
-          'X-Priority': '3',
-          'Importance': 'Normal',
-          'Sensitivity': 'Normal',
-          'Feedback-ID': `${Math.random().toString(36).substring(2, 8)}:gmail:smtp`
-        }
-      };
-
-      await transporter.sendMail(mailOptions);
-
-      const payload = { success: true, recipient: recipient.email, name: recipient.name };
-      io.emit('mail_sent', payload);
-      res.write(`data: ${JSON.stringify(payload)}\n\n`);
-
-    } catch (err) {
-      const errPayload = { success: false, recipient: recipient.email, error: err.message };
-      io.emit('mail_error', errPayload);
-      res.write(`data: ${JSON.stringify(errPayload)}\n\n`);
+    // Small micro-delay between batches to maintain speed while keeping spam score clean
+    if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
+      await new Promise(resolve => setTimeout(resolve, 80));
     }
   }
 
