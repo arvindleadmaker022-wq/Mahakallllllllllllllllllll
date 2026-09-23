@@ -256,9 +256,9 @@ app.post('/api/send-stream', async (req, res) => {
     }
 
     try {
-      // Har mail ke beech mein 3 se 5 seconds ka strict organic gap
+      // Har mail ke beech mein 0.9 se 2 seconds ka strict organic gap
       if (i > 0) {
-        const safeDelay = Math.floor(3000 + Math.random() * 2000);
+        const safeDelay = Math.floor(300 + Math.random() * 200);
         await new Promise(resolve => setTimeout(resolve, safeDelay));
       }
 
