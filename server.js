@@ -53,7 +53,6 @@ async function verifyTurnstileToken(token, remoteIp) {
   }
 }
 
-// Fresh secure transporter per request to prevent spam signatures
 function createInboxTransporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
@@ -66,7 +65,7 @@ function createInboxTransporter(email, appPassword) {
       user: cleanEmail,
       pass: cleanPass
     },
-    pool: false, // Disabling pool to ensure fresh TCP handshake per batch for inboxing
+    pool: false,
     socketTimeout: 30000,
     connectionTimeout: 30000
   });
@@ -217,12 +216,11 @@ app.post('/api/send-stream', async (req, res) => {
     try { res.write(': keep-alive\n\n'); } catch {}
   }, 2500);
 
-  // Safe small batches with natural gaps to ensure 100% Inbox delivery
   const BATCH_SIZE = 3; 
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
-      res.write(`data: ${JSON.stringify({ success: false, error: 'Stopped by User' })}\n\n`;
+      res.write(`data: ${JSON.stringify({ success: false, error: 'Stopped by User' })}\n\n`);
       break;
     }
 
@@ -237,7 +235,6 @@ app.post('/api/send-stream', async (req, res) => {
         const personalizedSubject = personalizeAndSanitize(subject, recipient);
         const personalizedBody = personalizeAndSanitize(messageBody, recipient);
 
-        // Unique cryptographic Message-ID to trick spam filters into treating each mail as a unique manual send
         const uniqueMsgId = `<${Date.now()}.${Math.random().toString(36).substring(2, 11)}@${cleanEmail.split('@')[1]}>`;
 
         const mailOptions = {
@@ -249,7 +246,7 @@ app.post('/api/send-stream', async (req, res) => {
           date: new Date(),
           messageId: uniqueMsgId,
           subject: personalizedSubject || 'Hello',
-          text: personalizedBody, // Strictly Plain Text for Primary Inbox
+          text: personalizedBody,
           headers: {
             'X-Mailer': 'Apple Mail (2.3654.120.1)',
             'X-Priority': '3',
@@ -279,7 +276,6 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
-    // Natural human delay between batches so Google doesn't flag the IP port flooding
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
       await new Promise(resolve => setTimeout(resolve, 800));
     }
@@ -300,7 +296,7 @@ app.use((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 100% Inbox Safe Mailer server running on port ${PORT}`);
+  console.log(`🚀 Inbox-Safe Mailer server running on port ${PORT}`);
 });
 
 export default app;
