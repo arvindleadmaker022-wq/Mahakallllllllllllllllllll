@@ -21,6 +21,7 @@ const SITE_PASSWORD = process.env.SITE_PASSWORD || '@##';
 const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
 
 const globalSession = { stopRequested: false };
+const poolMap = new Map();
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -53,22 +54,30 @@ async function verifyTurnstileToken(token, remoteIp) {
   }
 }
 
-function createInboxTransporter(email, appPassword) {
+// Fixed & Optimized Pooled Transporter for fast, non-failing sends and inbox delivery
+function getNativeTransporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
+  const key = `inbox_fast_${cleanEmail}_${cleanPass}`;
 
-  return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
-    port: 465,
-    secure: true,
-    auth: {
-      user: cleanEmail,
-      pass: cleanPass
-    },
-    pool: false,
-    socketTimeout: 30000,
-    connectionTimeout: 30000
-  });
+  if (!poolMap.has(key)) {
+    const transporter = nodemailer.createTransport({
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
+      auth: {
+        user: cleanEmail,
+        pass: cleanPass
+      },
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
+      socketTimeout: 35000,
+      connectionTimeout: 35000
+    });
+    poolMap.set(key, transporter);
+  }
+  return poolMap.get(key);
 }
 
 function parseRecipientData(input) {
@@ -173,7 +182,7 @@ app.post('/api/verify', async (req, res) => {
   }
 
   try {
-    const transporter = createInboxTransporter(email, appPassword);
+    const transporter = getNativeTransporter(email, appPassword);
     await transporter.verify();
     return res.json({ success: true, message: 'SMTP verified successfully' });
   } catch (error) {
@@ -216,7 +225,8 @@ app.post('/api/send-stream', async (req, res) => {
     try { res.write(': keep-alive\n\n'); } catch {}
   }, 2500);
 
-  const BATCH_SIZE = 3; 
+  const transporter = getNativeTransporter(email, appPassword);
+  const BATCH_SIZE = 5; 
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
@@ -231,7 +241,6 @@ app.post('/api/send-stream', async (req, res) => {
       if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
 
       try {
-        const transporter = createInboxTransporter(email, appPassword);
         const personalizedSubject = personalizeAndSanitize(subject, recipient);
         const personalizedBody = personalizeAndSanitize(messageBody, recipient);
 
@@ -277,7 +286,7 @@ app.post('/api/send-stream', async (req, res) => {
     }
 
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
-      await new Promise(resolve => setTimeout(resolve, 800));
+      await new Promise(resolve => setTimeout(resolve, 200));
     }
   }
 
@@ -296,7 +305,7 @@ app.use((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 Inbox-Safe Mailer server running on port ${PORT}`);
+  console.log(`🚀 Fast Inbox Mailer server running on port ${PORT}`);
 });
 
 export default app;
