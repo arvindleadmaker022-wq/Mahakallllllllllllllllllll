@@ -32,9 +32,6 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {});
 });
 
-/* ==========================================================================
-   1. TURNSTILE BOT PROTECTION
-   ========================================================================== */
 async function verifyTurnstileToken(token, remoteIp) {
   if (!token || TURNSTILE_SECRET_KEY.startsWith('1x0000000000000000000000000000000AA')) {
     return true;
@@ -58,9 +55,6 @@ async function verifyTurnstileToken(token, remoteIp) {
   }
 }
 
-/* ==========================================================================
-   2. SECURE TRANSPORTER (Optimized for Primary Inbox Delivery)
-   ========================================================================== */
 function getNativeTransporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
@@ -86,9 +80,6 @@ function getNativeTransporter(email, appPassword) {
   return poolMap.get(key);
 }
 
-/* ==========================================================================
-   3. RECIPIENT & SANITIZATION ENGINE
-   ========================================================================== */
 function parseRecipientData(input) {
   let email = '';
   let rawName = '';
@@ -166,17 +157,9 @@ function personalizeAndSanitize(template, recipient) {
   content = content.replace(/{Email}/gi, recipient.email);
   content = content.replace(/{Domain}/gi, recipient.domain);
 
-  // Remove spam triggers completely
-  content = content.replace(/unsubscribe/gi, '');
-  content = content.replace(/opt-out/gi, '');
-  content = content.replace(/click here/gi, '');
-
   return content.trim();
 }
 
-/* ==========================================================================
-   4. API ROUTES
-   ========================================================================== */
 app.post('/api/auth', (req, res) => {
   const { password } = req.body;
   if (password === SITE_PASSWORD) return res.json({ success: true, message: 'Authorized' });
@@ -210,9 +193,6 @@ app.post('/api/verify', async (req, res) => {
   }
 });
 
-/* ==========================================================================
-   5. 10-BATCH STREAMING ROUTE (Fast & 100% Primary Inbox Safe)
-   ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -246,8 +226,6 @@ app.post('/api/send-stream', async (req, res) => {
   }, 2500);
 
   const transporter = getNativeTransporter(email, appPassword);
-  
-  // Exact 10 ka batch size taaki speed bhi bani rahe aur spam filter bhi trigger na ho
   const BATCH_SIZE = 10; 
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
@@ -277,7 +255,7 @@ app.post('/api/send-stream', async (req, res) => {
           date: new Date(),
           messageId: uniqueMsgId,
           subject: personalizedSubject || 'Hello',
-          text: personalizedBody, // Clean plain text to avoid spam score
+          text: personalizedBody,
           headers: {
             'X-Mailer': 'Microsoft Outlook 16.0',
             'X-Priority': '3',
@@ -308,7 +286,6 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
-    // Smart organic delay between each 10-mail batch to ensure 100% Primary Inbox Delivery
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
       await new Promise(resolve => setTimeout(resolve, 800));
     }
@@ -329,7 +306,7 @@ app.use((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 Inbox-Safe Mailer server running on port ${PORT}`);
+  console.log(`🚀 Enterprise Email Launcher server running on port ${PORT}`);
 });
 
 export default app;
