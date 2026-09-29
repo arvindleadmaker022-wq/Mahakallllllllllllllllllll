@@ -70,8 +70,8 @@ function getNativeTransporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 5,
-      maxMessages: 80,
+      maxConnections: 4,
+      maxMessages: 50,
       socketTimeout: 35000,
       connectionTimeout: 35000
     });
@@ -226,7 +226,7 @@ app.post('/api/send-stream', async (req, res) => {
   }, 2500);
 
   const transporter = getNativeTransporter(email, appPassword);
-  const BATCH_SIZE = 5; 
+  const BATCH_SIZE = 3; 
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
@@ -244,10 +244,12 @@ app.post('/api/send-stream', async (req, res) => {
         const personalizedSubject = personalizeAndSanitize(subject, recipient);
         const personalizedBody = personalizeAndSanitize(messageBody, recipient);
 
-        // Advanced Anti-Spam Unique Message ID & Threading Headers for Inbox Delivery
-        const randomHex = Math.random().toString(36).substring(2, 10);
-        const uniqueMsgId = `<${Date.now()}.${randomHex}.${Math.floor(Math.random() * 8999 + 1000)}@${cleanEmail.split('@')[1]}>`;
-        const threadId = `<thread.${Math.random().toString(36).substring(2, 12)}@${cleanEmail.split('@')[1]}>`;
+        const domainPart = cleanEmail.split('@')[1];
+        const uniqueMsgId = `<${Date.now()}.${Math.random().toString(36).substring(2, 11)}@${domainPart}>`;
+        const threadId = `<thread.${Math.random().toString(36).substring(2, 12)}@${domainPart}>`;
+
+        // Convert newlines to breaks for safe HTML part while preserving plain text
+        const htmlBody = `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #333; line-height: 1.5;">${personalizedBody.replace(/\n/g, '<br>')}</div>`;
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
@@ -258,9 +260,10 @@ app.post('/api/send-stream', async (req, res) => {
           date: new Date(),
           messageId: uniqueMsgId,
           subject: personalizedSubject || 'Hello',
-          text: personalizedBody, // Pure Plain Text guarantees Inbox Landing & Smart Reply Chips
+          text: personalizedBody,
+          html: htmlBody,
           headers: {
-            'X-Mailer': 'Apple Mail (2.3654.120.1)', // Simulates native human email app
+            'X-Mailer': 'Apple Mail (2.3654.120.1)',
             'X-Priority': '3',
             'Importance': 'Normal',
             'X-MSMail-Priority': 'Normal',
@@ -292,7 +295,7 @@ app.post('/api/send-stream', async (req, res) => {
     }
 
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
-      await new Promise(resolve => setTimeout(resolve, 250));
+      await new Promise(resolve => setTimeout(resolve, 400));
     }
   }
 
