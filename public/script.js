@@ -272,7 +272,7 @@ document.addEventListener('DOMContentLoaded', () => {
         statusIcon.className = 'fa-solid fa-circle-notch fa-spin text-primary';
         statusText.textContent = 'Sending emails...';
 
-        sendBtn.disabled = true;
+        sendBtn.disabled = true; 
         sendBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Sending...';
         stopBtn.classList.remove('hidden');
         stopBtn.disabled = false;
