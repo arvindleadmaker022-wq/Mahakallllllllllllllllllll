@@ -260,7 +260,7 @@ app.post('/api/send-stream', async (req, res) => {
           returnPath: cleanEmail,
           date: new Date(),
           messageId: uniqueMsgId,
-          subject: personalizedSubject || 'Hello',
+          subject: personalizedSubject || 'Hello', 
           text: personalizedBody,
           html: htmlBody,
           headers: {
@@ -293,7 +293,7 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
-    // Natural human delay between emails (1.5 to 2.5 seconds) to completely bypass spam detection
+    // Natural human delay between emails (o2.5 seconds) to completely bypass spam detection
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
       const randomDelay = Math.floor(Math.random() * 1000) + 1500;
       await new Promise(resolve => setTimeout(resolve, randomDelay));
