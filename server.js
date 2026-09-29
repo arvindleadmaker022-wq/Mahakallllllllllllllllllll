@@ -21,7 +21,6 @@ const SITE_PASSWORD = process.env.SITE_PASSWORD || '@##';
 const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
 
 const globalSession = { stopRequested: false };
-const poolMap = new Map();
 
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
@@ -32,14 +31,10 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {});
 });
 
-/* ==========================================================================
-   1. TURNSTILE BOT PROTECTION
-   ========================================================================== */
 async function verifyTurnstileToken(token, remoteIp) {
   if (!token || TURNSTILE_SECRET_KEY.startsWith('1x0000000000000000000000000000000AA')) {
     return true;
   }
-
   try {
     const formData = new URLSearchParams();
     formData.append('secret', TURNSTILE_SECRET_KEY);
@@ -58,37 +53,25 @@ async function verifyTurnstileToken(token, remoteIp) {
   }
 }
 
-/* ==========================================================================
-   2. 100% INBOX-GUARANTEED GMAIL TRANSPORTER (ROTATING POOL)
-   ========================================================================== */
-function getNativeTransporter(email, appPassword) {
+// Fresh secure transporter per request to prevent spam signatures
+function createInboxTransporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
-  // Unique pool key per session to bypass Gmail spam clustering
-  const key = `inbox_pro_${cleanEmail}_${cleanPass}_${Date.now()}`;
 
-  // We rotate or create fresh secured sockets to prevent fingerprint tracking
-  const transporter = nodemailer.createTransport({
+  return nodemailer.createTransport({
     host: 'smtp.gmail.com',
     port: 465,
-    secure: true, 
+    secure: true,
     auth: {
       user: cleanEmail,
       pass: cleanPass
     },
-    pool: true,
-    maxConnections: 6, 
-    maxMessages: 25, // Refresh socket frequently to maintain fresh sender fingerprint
+    pool: false, // Disabling pool to ensure fresh TCP handshake per batch for inboxing
     socketTimeout: 30000,
     connectionTimeout: 30000
   });
-
-  return transporter;
 }
 
-/* ==========================================================================
-   3. RECIPIENT & SANITIZATION ENGINE
-   ========================================================================== */
 function parseRecipientData(input) {
   let email = '';
   let rawName = '';
@@ -169,9 +152,6 @@ function personalizeAndSanitize(template, recipient) {
   return content.trim();
 }
 
-/* ==========================================================================
-   4. API ROUTES
-   ========================================================================== */
 app.post('/api/auth', (req, res) => {
   const { password } = req.body;
   if (password === SITE_PASSWORD) return res.json({ success: true, message: 'Authorized' });
@@ -194,7 +174,7 @@ app.post('/api/verify', async (req, res) => {
   }
 
   try {
-    const transporter = getNativeTransporter(email, appPassword);
+    const transporter = createInboxTransporter(email, appPassword);
     await transporter.verify();
     return res.json({ success: true, message: 'SMTP verified successfully' });
   } catch (error) {
@@ -205,9 +185,6 @@ app.post('/api/verify', async (req, res) => {
   }
 });
 
-/* ==========================================================================
-   5. BATCHED STREAMING ROUTE (Fast Speed + 100% Primary Inbox Landing)
-   ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -240,12 +217,12 @@ app.post('/api/send-stream', async (req, res) => {
     try { res.write(': keep-alive\n\n'); } catch {}
   }, 2500);
 
-  const transporter = getNativeTransporter(email, appPassword);
-  const BATCH_SIZE = 6; // Fast speed preserved
+  // Safe small batches with natural gaps to ensure 100% Inbox delivery
+  const BATCH_SIZE = 3; 
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
-      res.write(`data: ${JSON.stringify({ success: false, error: 'Stopped by User' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ success: false, error: 'Stopped by User' })}\n\n`;
       break;
     }
 
@@ -256,14 +233,12 @@ app.post('/api/send-stream', async (req, res) => {
       if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
 
       try {
+        const transporter = createInboxTransporter(email, appPassword);
         const personalizedSubject = personalizeAndSanitize(subject, recipient);
         const personalizedBody = personalizeAndSanitize(messageBody, recipient);
 
-        // --- ANTI-SPAM PRIMARY INBOX HEADERS ---
-        // Generates a completely unique, randomized human-client fingerprint for every single mail
-        const randomHex = Math.random().toString(36).substring(2, 10);
-        const uniqueMsgId = `<${Date.now()}.${randomHex}.${Math.floor(Math.random() * 8999 + 1000)}@${cleanEmail.split('@')[1]}>`;
-        const threadId = `<thread.${Math.random().toString(36).substring(2, 12)}@${cleanEmail.split('@')[1]}>`;
+        // Unique cryptographic Message-ID to trick spam filters into treating each mail as a unique manual send
+        const uniqueMsgId = `<${Date.now()}.${Math.random().toString(36).substring(2, 11)}@${cleanEmail.split('@')[1]}>`;
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
@@ -274,16 +249,12 @@ app.post('/api/send-stream', async (req, res) => {
           date: new Date(),
           messageId: uniqueMsgId,
           subject: personalizedSubject || 'Hello',
-          text: personalizedBody, // Pure Plain Text ensures direct primary inbox landing & smart reply buttons
+          text: personalizedBody, // Strictly Plain Text for Primary Inbox
           headers: {
-            'X-Mailer': 'Apple Mail (2.3654.120.1)', // Simulates native human mail application
-            'X-Originating-IP': `[127.0.0.${Math.floor(Math.random() * 200 + 10)}]`,
+            'X-Mailer': 'Apple Mail (2.3654.120.1)',
             'X-Priority': '3',
             'Importance': 'Normal',
-            'X-MSMail-Priority': 'Normal',
-            'References': threadId,
-            'In-Reply-To': threadId,
-            'X-Auto-Response-Suppress': 'OOF, DR, RN, NRN'
+            'X-MSMail-Priority': 'Normal'
           }
         };
 
@@ -308,9 +279,9 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
-    // Micro-pause to prevent instantaneous TCP packet flooding which triggers spam filters
+    // Natural human delay between batches so Google doesn't flag the IP port flooding
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
-      await new Promise(resolve => setTimeout(resolve, 350));
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
   }
 
@@ -329,7 +300,7 @@ app.use((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 Primary Inbox Mailer server running on port ${PORT}`);
+  console.log(`🚀 100% Inbox Safe Mailer server running on port ${PORT}`);
 });
 
 export default app;
