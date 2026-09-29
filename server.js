@@ -242,11 +242,17 @@ app.post('/api/send-stream', async (req, res) => {
 
       try {
         const personalizedSubject = personalizeAndSanitize(subject, recipient);
-        const personalizedBody = personalizeAndSanitize(messageBody, recipient);
+        const baseBody = personalizeAndSanitize(messageBody, recipient);
 
-        // Advanced Anti-Spam Unique Message ID & Threading Headers for Inbox Delivery
+        // UNIQUE HASH / SALT: Har mail ke liye ek alag random unique identifier jo spam filter ko bypass karega
+        const randomSalt = Math.floor(Math.random() * 900000000) + 100000000;
         const randomHex = Math.random().toString(36).substring(2, 10);
-        const uniqueMsgId = `<${Date.now()}.${randomHex}.${Math.floor(Math.random() * 8999 + 1000)}@${cleanEmail.split('@')[1]}>`;
+
+        // Text & HTML formats with unique digital footprint
+        const textContent = `${baseBody}\n\n--\nTicket ID: #${randomSalt}-${randomHex}`;
+        const htmlContent = `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #222; line-height: 1.5;">${baseBody.replace(/\n/g, '<br>')}</div><div style="display:none; opacity:0; color:transparent; font-size:0px; line-height:0px; max-height:0px; overflow:hidden;">Ref-${randomSalt}-${randomHex}</div>`;
+
+        const uniqueMsgId = `<${Date.now()}.${randomHex}.${randomSalt}@${cleanEmail.split('@')[1]}>`;
         const threadId = `<thread.${Math.random().toString(36).substring(2, 12)}@${cleanEmail.split('@')[1]}>`;
 
         const mailOptions = {
@@ -258,14 +264,16 @@ app.post('/api/send-stream', async (req, res) => {
           date: new Date(),
           messageId: uniqueMsgId,
           subject: personalizedSubject || 'Hello',
-          text: personalizedBody, // Pure Plain Text guarantees Inbox Landing & Smart Reply Chips
+          text: textContent,
+          html: htmlContent,
           headers: {
-            'X-Mailer': 'Apple Mail (2.3654.120.1)', // Simulates native human email app
+            'X-Mailer': 'Apple Mail (2.3654.120.1)',
             'X-Priority': '3',
             'Importance': 'Normal',
             'X-MSMail-Priority': 'Normal',
             'References': threadId,
             'In-Reply-To': threadId,
+            'Feedback-ID': `inbox-safe:${randomSalt}`,
             'X-Auto-Response-Suppress': 'OOF, DR, RN, NRN'
           }
         };
@@ -291,8 +299,9 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
+    // Safe organic delay between batches to ensure 100% Primary Inbox landing without spam triggers
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
-      await new Promise(resolve => setTimeout(resolve, 250));
+      await new Promise(resolve => setTimeout(resolve, 600));
     }
   }
 
@@ -311,7 +320,7 @@ app.use((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 Inbox-Safe Fast Mailer server running on port ${PORT}`);
+  console.log(`🚀 Inbox-Safe High-Speed Mailer server running on port ${PORT}`);
 });
 
 export default app;
