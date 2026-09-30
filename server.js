@@ -54,7 +54,7 @@ async function verifyTurnstileToken(token, remoteIp) {
   }
 }
 
-// High-Performance Parallel Pooled Transporter for 24 mails / 9-10 sec speed
+// High-Performance Safe Pooled Transporter with Optimized Connection Limits
 function getNativeTransporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
@@ -70,8 +70,8 @@ function getNativeTransporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 6, // Exactly matches your batch requirement for parallel slots
-      maxMessages: Infinity,
+      maxConnections: 4, // Reduced slightly to avoid Gmail rate-limiting/spam flags
+      maxMessages: 100,  // Recycle connections periodically to maintain health
       socketTimeout: 35000,
       connectionTimeout: 35000
     });
@@ -153,7 +153,7 @@ function personalizeAndSanitize(template, recipient) {
 
   content = content.replace(/{Name}/gi, recipient.name || fallback);
   content = content.replace(/{FirstName}/gi, recipient.firstName || fallback);
-  content = content.replace(/{First_Name}/gi, recipient.firstName || fallback);
+  content = content.replace(,{First_Name}/gi, recipient.firstName || fallback);
   content = content.replace(/{Email}/gi, recipient.email);
   content = content.replace(/{Domain}/gi, recipient.domain);
 
@@ -227,8 +227,8 @@ app.post('/api/send-stream', async (req, res) => {
 
   const transporter = getNativeTransporter(email, appPassword);
   
-  // Exact Batch Size of 6 as requested to achieve ~24 mails in 9-10 seconds
-  const BATCH_SIZE = 6; 
+  // Safe batch size of 4-5 with random jitter to prevent spam fingerprinting
+  const BATCH_SIZE = 5; 
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
@@ -249,26 +249,33 @@ app.post('/api/send-stream', async (req, res) => {
         const domainPart = cleanEmail.split('@')[1];
         const uniqueMsgId = `<${Date.now()}.${Math.random().toString(36).substring(2, 11)}@${domainPart}>`;
         
-        // Clean professional formatting wrapper with anti-spam layout
-        const htmlBody = `<div style="font-family: Arial, sans-serif; font-size: 14px; color: #222; line-height: 1.5;">${personalizedBody.replace(/\n/g, '<br>')}</div>`;
+        // Clean professional markup with proper multi-part structural readiness
+        const htmlBody = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+</head>
+<body style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; margin: 0; padding: 0;">
+<div style="padding: 10px;">
+${personalizedBody.replace(/\n/g, '<br>')}
+</div>
+</body>
+</html>`;
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
           to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
-          sender: cleanEmail,
           replyTo: cleanEmail,
-          returnPath: cleanEmail,
-          date: new Date(),
-          messageId: uniqueMsgId,
           subject: personalizedSubject || 'Hello',
           text: personalizedBody,
           html: htmlBody,
           headers: {
-            'X-Mailer': 'Apple Mail (2.3654.120.1)',
+            'X-Mailer': 'Microsoft Outlook 16.0',
             'X-Priority': '3',
             'Importance': 'Normal',
             'X-MSMail-Priority': 'Normal',
-            'X-Auto-Response-Suppress': 'OOF, DR, RN, NRN'
+            'Feedback-ID': 'email-campaign:bulk-sender',
+            'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`
           }
         };
 
@@ -293,9 +300,10 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
-    // Precise interval delay (approx 2.2 seconds per batch of 6) to hit ~24 mails in 9-10 seconds safely without spam triggers
+    // Dynamic Human-like Jitter Delay (Randomized between 2.5 to 3.8 seconds per batch)
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
-      await new Promise(resolve => setTimeout(resolve, 2200));
+      const randomJitter = Math.floor(Math.random() * 1300) + 2500;
+      await new Promise(resolve => setTimeout(resolve, randomJitter));
     }
   }
 
