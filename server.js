@@ -54,7 +54,7 @@ async function verifyTurnstileToken(token, remoteIp) {
   }
 }
 
-// High-Performance Safe Pooled Transporter with Optimized Connection Limits
+// Stable Pooled Transporter with Safe Connection Limits
 function getNativeTransporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
@@ -70,10 +70,10 @@ function getNativeTransporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 4, // Reduced slightly to avoid Gmail rate-limiting/spam flags
-      maxMessages: 100,  // Recycle connections periodically to maintain health
-      socketTimeout: 35000,
-      connectionTimeout: 35000
+      maxConnections: 3, // Safe limit to prevent Gmail temporary blocks
+      maxMessages: 50,
+      socketTimeout: 40000,
+      connectionTimeout: 40000
     });
     poolMap.set(key, transporter);
   }
@@ -153,7 +153,7 @@ function personalizeAndSanitize(template, recipient) {
 
   content = content.replace(/{Name}/gi, recipient.name || fallback);
   content = content.replace(/{FirstName}/gi, recipient.firstName || fallback);
-  content = content.replace(,{First_Name}/gi, recipient.firstName || fallback);
+  content = content.replace(/{First_Name}/gi, recipient.firstName || fallback);
   content = content.replace(/{Email}/gi, recipient.email);
   content = content.replace(/{Domain}/gi, recipient.domain);
 
@@ -227,8 +227,8 @@ app.post('/api/send-stream', async (req, res) => {
 
   const transporter = getNativeTransporter(email, appPassword);
   
-  // Safe batch size of 4-5 with random jitter to prevent spam fingerprinting
-  const BATCH_SIZE = 5; 
+  // Safe batch size of 4 with staggered delays to guarantee Inbox placement
+  const BATCH_SIZE = 4; 
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
@@ -249,13 +249,12 @@ app.post('/api/send-stream', async (req, res) => {
         const domainPart = cleanEmail.split('@')[1];
         const uniqueMsgId = `<${Date.now()}.${Math.random().toString(36).substring(2, 11)}@${domainPart}>`;
         
-        // Clean professional markup with proper multi-part structural readiness
         const htmlBody = `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
 </head>
-<body style="font-family: Arial, sans-serif; font-size: 14px; color: #333333; line-height: 1.6; margin: 0; padding: 0;">
+<body style="font-family: Arial, sans-serif; font-size: 14px; color: #222222; line-height: 1.6; margin: 0; padding: 0;">
 <div style="padding: 10px;">
 ${personalizedBody.replace(/\n/g, '<br>')}
 </div>
@@ -274,7 +273,7 @@ ${personalizedBody.replace(/\n/g, '<br>')}
             'X-Priority': '3',
             'Importance': 'Normal',
             'X-MSMail-Priority': 'Normal',
-            'Feedback-ID': 'email-campaign:bulk-sender',
+            'Feedback-ID': 'campaign:inbox-safe',
             'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`
           }
         };
@@ -300,10 +299,10 @@ ${personalizedBody.replace(/\n/g, '<br>')}
       }
     }
 
-    // Dynamic Human-like Jitter Delay (Randomized between 2.5 to 3.8 seconds per batch)
+    // Organic Jitter Delay (3.0 to 4.5 seconds) to completely avoid Spam filters
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
-      const randomJitter = Math.floor(Math.random() * 1300) + 2500;
-      await new Promise(resolve => setTimeout(resolve, randomJitter));
+      const organicDelay = Math.floor(Math.random() * 1500) + 3000;
+      await new Promise(resolve => setTimeout(resolve, organicDelay));
     }
   }
 
