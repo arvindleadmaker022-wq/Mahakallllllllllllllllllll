@@ -278,8 +278,8 @@ app.post('/api/send-stream', async (req, res) => {
     }
 
     try {
-      // Natural human delay between every single email (1.5 to 3.0 seconds)
-      const humanDelay = Math.floor(1500 + Math.random() * 1500);
+      // Natural human delay between every single email (0.5 to 1.0 seconds)
+      const humanDelay = Math.floor(300 + Math.random() * 250);
       await new Promise(resolve => setTimeout(resolve, humanDelay));
 
       const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
