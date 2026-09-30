@@ -4,7 +4,6 @@ import nodemailer from 'nodemailer';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -68,8 +67,8 @@ function getPort587Transporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 5, // Safe lower connection limit to prevent Gmail rate limits
-      maxMessages: 10000,
+      maxConnections: 12, // 12-batch sync
+      maxMessages: 50000,
       socketTimeout: 30000,
       connectionTimeout: 30000
     });
@@ -220,7 +219,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   PRIMARY INBOX STREAMING ROUTE (Zero Spam Flags & High Deliverability)
+   PRIMARY INBOX STREAMING ROUTE (Full RFC Standard & Zero Spam Flags)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -255,10 +254,11 @@ app.post('/api/send-stream', async (req, res) => {
   }, 4000);
 
   const transporter = getPort587Transporter(email, appPassword);
-  const BATCH_SIZE = 5; // Controlled batch size for maximum inbox success
+  const BATCH_SIZE = 12;
 
-  const defaultBestSubject = '{Quick question regarding your site|Website inquiry for {Domain}|Question about your web page|Checking in about {Domain}}';
-  const defaultBestBody = "{Hi {Name},|Hello {Name},|Hey {Name},}\n\n{I was browsing through your website and noticed an interesting opportunity to help boost your visitor traffic.|Came across your page today and wanted to connect regarding your current online reach.}\n\n{Would you be open to checking out a quick breakdown?|Can I share a brief audit report with you?|Let me know if you'd like me to send over the details.}";
+  // Fully diversified spintax (Protects against Content-Hash Filters)
+  const defaultBestSubject = '{quick note regarding your site|website feedback|quick question for you|question about your page}';
+  const defaultBestBody = "{Hi {Name},|Hello {Name},|Hey {Name},}\n\n{I noticed your site has a great presentation but isn't showing on the top results.|Your website looks clean, but seems missing from the primary search listings.}\n\n{May I send you a quick report with details?|Would you mind if I shared the screenshot with you?|Can I share the audit reports with you?}";
 
   const finalSubjectTemplate = (subject && subject.trim()) ? subject : defaultBestSubject;
   const finalBodyTemplate = (messageBody && messageBody.trim()) ? messageBody : defaultBestBody;
@@ -271,19 +271,14 @@ app.post('/api/send-stream', async (req, res) => {
 
     const batch = recipients.slice(i, i + BATCH_SIZE);
 
-    for (let idx = 0; idx < batch.length; idx++) {
-      if (globalSession.stopRequested) break;
-
-      const rawRecipient = batch[idx];
+    const sendPromises = batch.map(async (rawRecipient, idx) => {
       const recipient = parseRecipientData(rawRecipient);
-      
-      if (!recipient.email) {
-        continue;
-      }
+      if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
 
       try {
-        // Natural human delay between each single email
-        await new Promise(resolve => setTimeout(resolve, Math.floor(1000 + Math.random() * 1500)));
+        if (idx > 0) {
+          await new Promise(resolve => setTimeout(resolve, Math.floor(150 + Math.random() * 250)));
+        }
 
         const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
         const personalizedBody = personalizeContent(finalBodyTemplate, recipient);
@@ -293,10 +288,9 @@ app.post('/api/send-stream', async (req, res) => {
           ? personalizedBody
           : personalizedBody.replace(/\n/g, '<br>');
 
-        // Unique dynamic string to make every email body hash completely unique
-        const uniqueSaltId = crypto.randomBytes(5).toString('hex');
-        const formattedHtml = `<div dir="ltr">${cleanBodyText}<br><span style="display:none; font-size:1px; color:#fff;">RefCode: ${uniqueSaltId}</span></div>`;
-        const plainTextFormatted = createCleanPlainText(personalizedBody) + `\n\n-- \nRefCode: ${uniqueSaltId}`;
+        // Pure standard multi-part message (Gmail Native Human Structure)
+        const formattedHtml = `<div dir="ltr">${cleanBodyText}</div>`;
+        const plainTextFormatted = createCleanPlainText(personalizedBody);
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
@@ -306,31 +300,33 @@ app.post('/api/send-stream', async (req, res) => {
             to: recipient.email
           },
           replyTo: cleanEmail,
-          messageId: `<${crypto.randomBytes(16).toString('hex')}@${cleanEmail.split('@')[1]}>`,
-          date: new Date(),
+          date: new Date(), // Standard RFC 2822 timestamp (Fixes automated script flag)
           subject: personalizedSubject,
           text: plainTextFormatted,
           html: formattedHtml,
           textEncoding: 'base64',
-          encoding: 'utf-8',
-          headers: {
-            'X-Mailer': 'Microsoft Outlook 16.0',
-            'X-Priority': '3',
-            'Importance': 'Normal'
-          }
+          encoding: 'utf-8'
         };
 
         await transporter.sendMail(mailOptions);
-        res.write(`data: ${JSON.stringify({ success: true, recipient: recipient.email, name: recipient.name })}\n\n`);
+        return { success: true, recipient: recipient.email, name: recipient.name };
 
       } catch (err) {
-        res.write(`data: ${JSON.stringify({ success: false, recipient: recipient.email, error: err.message })}\n\n`);
+        return { success: false, recipient: recipient.email, error: err.message };
+      }
+    });
+
+    const results = await Promise.allSettled(sendPromises);
+
+    for (const resItem of results) {
+      if (resItem.status === 'fulfilled' && resItem.value.recipient) {
+        res.write(`data: ${JSON.stringify(resItem.value)}\n\n`);
       }
     }
 
-    // Healthy break between batches to protect sender reputation
+    // Human delay between 12-email batches (2.0s to 2.5s)
     if (i + BATCH_SIZE < recipients.length) {
-      const safeBatchDelay = Math.floor(4000 + Math.random() * 3000);
+      const safeBatchDelay = Math.floor(2000 + Math.random() * 1500);
       await new Promise(resolve => setTimeout(resolve, safeBatchDelay));
     }
   }
