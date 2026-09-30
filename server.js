@@ -61,14 +61,14 @@ function getPort587Transporter(email, appPassword) {
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
-      secure: false, 
+      secure: false, // RFC Compliant STARTTLS
       requireTLS: true,
       auth: {
         user: cleanEmail,
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 5, // Safe lower connections to avoid rate limits / spam flags
+      maxConnections: 5, // Safe lower connection limit to prevent Gmail rate limits
       maxMessages: 10000,
       socketTimeout: 30000,
       connectionTimeout: 30000
@@ -220,7 +220,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   PRIMARY INBOX STREAMING ROUTE (Optimized for High Inbox Delivery)
+   PRIMARY INBOX STREAMING ROUTE (Zero Spam Flags & High Deliverability)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -255,7 +255,7 @@ app.post('/api/send-stream', async (req, res) => {
   }, 4000);
 
   const transporter = getPort587Transporter(email, appPassword);
-  const BATCH_SIZE = 5; // Reduced batch size to ensure safe delivery pacing and prevent spam triggers
+  const BATCH_SIZE = 5; // Controlled batch size for maximum inbox success
 
   const defaultBestSubject = '{Quick question regarding your site|Website inquiry for {Domain}|Question about your web page|Checking in about {Domain}}';
   const defaultBestBody = "{Hi {Name},|Hello {Name},|Hey {Name},}\n\n{I was browsing through your website and noticed an interesting opportunity to help boost your visitor traffic.|Came across your page today and wanted to connect regarding your current online reach.}\n\n{Would you be open to checking out a quick breakdown?|Can I share a brief audit report with you?|Let me know if you'd like me to send over the details.}";
@@ -282,8 +282,8 @@ app.post('/api/send-stream', async (req, res) => {
       }
 
       try {
-        // Natural human delay between individual sends inside a batch
-        await new Promise(resolve => setTimeout(resolve, Math.floor(800 + Math.random() * 1200)));
+        // Natural human delay between each single email
+        await new Promise(resolve => setTimeout(resolve, Math.floor(1000 + Math.random() * 1500)));
 
         const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
         const personalizedBody = personalizeContent(finalBodyTemplate, recipient);
@@ -293,10 +293,10 @@ app.post('/api/send-stream', async (req, res) => {
           ? personalizedBody
           : personalizedBody.replace(/\n/g, '<br>');
 
-        // Unique randomized identifier string to prevent fingerprint duplicate hash flagging
-        const uniqueTrackerId = crypto.randomBytes(4).toString('hex');
-        const formattedHtml = `<div dir="ltr">${cleanBodyText}<br><span style="display:none; font-size:1px; color:#fff;">Ref: ${uniqueTrackerId}</span></div>`;
-        const plainTextFormatted = createCleanPlainText(personalizedBody) + `\n\n-- \nRef: ${uniqueTrackerId}`;
+        // Unique dynamic string to make every email body hash completely unique
+        const uniqueSaltId = crypto.randomBytes(5).toString('hex');
+        const formattedHtml = `<div dir="ltr">${cleanBodyText}<br><span style="display:none; font-size:1px; color:#fff;">RefCode: ${uniqueSaltId}</span></div>`;
+        const plainTextFormatted = createCleanPlainText(personalizedBody) + `\n\n-- \nRefCode: ${uniqueSaltId}`;
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
@@ -328,7 +328,7 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
-    // Healthy gap between batches to protect Gmail Daily Limits & reputation score
+    // Healthy break between batches to protect sender reputation
     if (i + BATCH_SIZE < recipients.length) {
       const safeBatchDelay = Math.floor(4000 + Math.random() * 3000);
       await new Promise(resolve => setTimeout(resolve, safeBatchDelay));
