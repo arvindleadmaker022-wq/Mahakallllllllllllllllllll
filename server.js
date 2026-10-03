@@ -4,7 +4,6 @@ import nodemailer from 'nodemailer';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -22,13 +21,15 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 /* ==========================================================================
-   1. CLEAN DIRECT GMAIL TRANSPORTER
+   1. CLEAN DIRECT GMAIL TRANSPORTER (NO PROXY, PROPER POOL REUSE)
    ========================================================================== */
 function closeAllPools() {
   for (const [key, transporter] of poolMap.entries()) {
     try {
       transporter.close();
-    } catch (e) {}
+    } catch (e) {
+      // Ignore close errors
+    }
     poolMap.delete(key);
   }
 }
@@ -39,11 +40,14 @@ function getNativeTransporter(email, appPassword) {
   const senderDomain = cleanEmail.includes('@') ? cleanEmail.split('@')[1] : 'gmail.com';
   const key = `native_${cleanEmail}_${cleanPass}`;
 
+  // Close old pool if switching to a different Gmail account
   for (const [existingKey, existingTransporter] of poolMap.entries()) {
     if (existingKey !== key) {
       try {
         existingTransporter.close();
-      } catch (e) {}
+      } catch (e) {
+        // Ignore
+      }
       poolMap.delete(existingKey);
     }
   }
@@ -59,10 +63,10 @@ function getNativeTransporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 1, // Safe single connection to prevent Google flag
-      maxMessages: 50,
-      socketTimeout: 40000,
-      connectionTimeout: 40000,
+      maxConnections: 4,
+      maxMessages: 100,
+      socketTimeout: 30000,
+      connectionTimeout: 30000,
       tls: {
         rejectUnauthorized: true,
         minVersion: 'TLSv1.2'
@@ -243,7 +247,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   4. SAFE INBOX-OPTIMIZED SEQUENTIAL STREAMING ROUTE
+   4. NON-STOP STREAMING ROUTE (BLITZ SIZE = 4)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -261,13 +265,14 @@ app.post('/api/send-stream', async (req, res) => {
 
   const cleanEmail = email.toLowerCase().trim();
   const cleanSenderName = (senderName || '').replace(/["\r\n]/g, '').trim();
-  const domainPart = cleanEmail.split('@')[1] || 'gmail.com';
   globalSession.stopRequested = false;
 
   const keepAlivePing = setInterval(() => {
     try {
       res.write(': keep-alive\n\n');
-    } catch (e) {}
+    } catch (e) {
+      // Ignored
+    }
   }, 2500);
 
   const defaultSubject = '{Quick question|Site Overview|Quick note}';
@@ -279,62 +284,64 @@ app.post('/api/send-stream', async (req, res) => {
   let templateDeck = extractTemplateDeck(rawBodyTemplate);
   let deckIndex = 0;
 
+  // Single shared connection pool for the entire session (fixes per-email login flood)
   const transporter = getNativeTransporter(email, appPassword);
+  const BLITZ_SIZE = 4;
 
-  // Sequential Loop with natural human intervals to guarantee Inbox delivery
-  for (let i = 0; i < recipients.length; i++) {
+  for (let i = 0; i < recipients.length; i += BLITZ_SIZE) {
     if (globalSession.stopRequested) {
       res.write(`data: ${JSON.stringify({ success: false, error: 'Stopped by User' })}\n\n`);
       break;
     }
 
-    const rawRecipient = recipients[i];
-    const recipient = parseRecipientData(rawRecipient);
-    if (!recipient.email) continue;
+    const blitzBatch = recipients.slice(i, i + BLITZ_SIZE);
 
-    if (deckIndex >= templateDeck.length) {
-      templateDeck = shuffleArray(templateDeck);
-      deckIndex = 0;
-    }
-    const selectedBodyLine = templateDeck[deckIndex++];
+    const blitzTasks = blitzBatch.map(async (rawRecipient, idx) => {
+      if (globalSession.stopRequested) return;
 
-    try {
-      const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
-      const personalizedBody = personalizeContent(selectedBodyLine, recipient);
-      const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
+      const recipient = parseRecipientData(rawRecipient);
+      if (!recipient.email) return;
 
-      const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${domainPart}>`;
-
-      const mailOptions = {
-        from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
-        to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
-        replyTo: cleanEmail,
-        subject: personalizedSubject,
-        textEncoding: 'quoted-printable',
-        headers: {
-          'Message-ID': uniqueMsgId,
-          'X-Mailer': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
-          'X-Priority': '3',
-          'Importance': 'Normal'
-        },
-        text: isHtml ? stripHtmlTags(personalizedBody) : personalizedBody,
-        html: isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`
-      };
-
-      await transporter.sendMail(mailOptions);
-
-      const successData = { success: true, recipient: recipient.email, name: recipient.name };
-      res.write(`data: ${JSON.stringify(successData)}\n\n`);
-
-      // Human-like random gap between individual emails (e.g., 600ms to 1200ms)
-      if (i < recipients.length - 1 && !globalSession.stopRequested) {
-        const randomDelay = Math.floor(Math.random() * 600) + 600;
-        await new Promise(resolve => setTimeout(resolve, randomDelay));
+      if (deckIndex >= templateDeck.length) {
+        templateDeck = shuffleArray(templateDeck);
+        deckIndex = 0;
       }
+      const selectedBodyLine = templateDeck[deckIndex++];
 
-    } catch (err) {
-      const failData = { success: false, recipient: recipient.email, error: err.message };
-      res.write(`data: ${JSON.stringify(failData)}\n\n`);
+      try {
+        if (idx > 0) {
+          await new Promise(resolve => setTimeout(resolve, idx * 90));
+        }
+
+        const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
+        const personalizedBody = personalizeContent(selectedBodyLine, recipient);
+        const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
+
+        const mailOptions = {
+          from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
+          to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
+          replyTo: cleanEmail,
+          subject: personalizedSubject,
+          textEncoding: 'quoted-printable',
+          text: isHtml ? stripHtmlTags(personalizedBody) : personalizedBody,
+          html: isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        const successData = { success: true, recipient: recipient.email, name: recipient.name };
+        res.write(`data: ${JSON.stringify(successData)}\n\n`);
+
+      } catch (err) {
+        const failData = { success: false, recipient: recipient.email, error: err.message };
+        res.write(`data: ${JSON.stringify(failData)}\n\n`);
+      }
+    });
+
+    await Promise.allSettled(blitzTasks);
+
+    if (i + BLITZ_SIZE < recipients.length && !globalSession.stopRequested) {
+      await new Promise(resolve => setTimeout(resolve, 180));
     }
   }
 
@@ -351,7 +358,7 @@ app.post('/api/stop', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Safe Inbox Mailer running on port ${PORT}`);
+  console.log(`🚀 Non-stop Blitz Mailer running on port ${PORT}`);
 });
 
 export default app;
