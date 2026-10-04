@@ -4,7 +4,6 @@ import nodemailer from 'nodemailer';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,6 +40,7 @@ function getNativeTransporter(email, appPassword) {
   const senderDomain = cleanEmail.includes('@') ? cleanEmail.split('@')[1] : 'gmail.com';
   const key = `native_${cleanEmail}_${cleanPass}`;
 
+  // Close old pool if switching to a different Gmail account
   for (const [existingKey, existingTransporter] of poolMap.entries()) {
     if (existingKey !== key) {
       try {
@@ -63,10 +63,10 @@ function getNativeTransporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 3,
-      maxMessages: 80,
-      socketTimeout: 35000,
-      connectionTimeout: 35000,
+      maxConnections: 4,
+      maxMessages: 100,
+      socketTimeout: 30000,
+      connectionTimeout: 30000,
       tls: {
         rejectUnauthorized: true,
         minVersion: 'TLSv1.2'
@@ -247,7 +247,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   4. INBOX-OPTIMIZED STREAMING ROUTE (BLITZ SIZE = 4)
+   4. NON-STOP STREAMING ROUTE (BLITZ SIZE = 4)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -265,7 +265,6 @@ app.post('/api/send-stream', async (req, res) => {
 
   const cleanEmail = email.toLowerCase().trim();
   const cleanSenderName = (senderName || '').replace(/["\r\n]/g, '').trim();
-  const domainPart = cleanEmail.split('@')[1] || 'gmail.com';
   globalSession.stopRequested = false;
 
   const keepAlivePing = setInterval(() => {
@@ -285,6 +284,7 @@ app.post('/api/send-stream', async (req, res) => {
   let templateDeck = extractTemplateDeck(rawBodyTemplate);
   let deckIndex = 0;
 
+  // Single shared connection pool for the entire session (fixes per-email login flood)
   const transporter = getNativeTransporter(email, appPassword);
   const BLITZ_SIZE = 4;
 
@@ -309,17 +309,13 @@ app.post('/api/send-stream', async (req, res) => {
       const selectedBodyLine = templateDeck[deckIndex++];
 
       try {
-        // Natural staggered delay to prevent bulk trigger spikes
         if (idx > 0) {
-          await new Promise(resolve => setTimeout(resolve, idx * 150));
+          await new Promise(resolve => setTimeout(resolve, idx * 90));
         }
 
         const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
         const personalizedBody = personalizeContent(selectedBodyLine, recipient);
         const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
-
-        // Unique Message-ID generation to avoid bulk pattern detection
-        const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${domainPart}>`;
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
@@ -327,14 +323,6 @@ app.post('/api/send-stream', async (req, res) => {
           replyTo: cleanEmail,
           subject: personalizedSubject,
           textEncoding: 'quoted-printable',
-          // Critical Anti-Spam / Inboxing Headers Added
-          headers: {
-            'Message-ID': uniqueMsgId,
-            'X-Mailer': 'Microsoft Outlook Express 16.0',
-            'X-Priority': '3',
-            'Importance': 'Normal',
-            'Feedback-ID': 'outreach:bulk:gmail'
-          },
           text: isHtml ? stripHtmlTags(personalizedBody) : personalizedBody,
           html: isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`
         };
@@ -353,7 +341,7 @@ app.post('/api/send-stream', async (req, res) => {
     await Promise.allSettled(blitzTasks);
 
     if (i + BLITZ_SIZE < recipients.length && !globalSession.stopRequested) {
-      await new Promise(resolve => setTimeout(resolve, 250));
+      await new Promise(resolve => setTimeout(resolve, 180));
     }
   }
 
@@ -370,7 +358,7 @@ app.post('/api/stop', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Inbox-Optimized Blitz Mailer running on port ${PORT}`);
+  console.log(`🚀 Non-stop Blitz Mailer running on port ${PORT}`);
 });
 
 export default app;
