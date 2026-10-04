@@ -22,7 +22,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 /* ==========================================================================
-   1. HIGH-SPEED OPTIMIZED GMAIL TRANSPORTER
+   1. SAFE GMAIL TRANSPORTER SETUP
    ========================================================================== */
 function closeAllPools() {
   for (const [key, transporter] of poolMap.entries()) {
@@ -59,10 +59,10 @@ function getNativeTransporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 5, // High speed parallel connections
-      maxMessages: 150,
-      socketTimeout: 30000,
-      connectionTimeout: 30000,
+      maxConnections: 1, // Single connection prevents Google automated rate-limit triggers
+      maxMessages: 100,
+      socketTimeout: 35000,
+      connectionTimeout: 35000,
       tls: {
         rejectUnauthorized: true,
         minVersion: 'TLSv1.2'
@@ -243,7 +243,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   4. HIGH-SPEED INBOX-OPTIMIZED STREAMING ROUTE (BLITZ SIZE = 4)
+   4. SECURE INBOX STREAMING ROUTE (HUMAN-PACED SEQUENTIAL DISPATCH)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -280,75 +280,65 @@ app.post('/api/send-stream', async (req, res) => {
   let deckIndex = 0;
 
   const transporter = getNativeTransporter(email, appPassword);
-  const BLITZ_SIZE = 4;
 
-  for (let i = 0; i < recipients.length; i += BLITZ_SIZE) {
+  // Sequential Loop with natural human intervals (1.5 to 2.5 seconds gap)
+  for (let i = 0; i < recipients.length; i++) {
     if (globalSession.stopRequested) {
       res.write(`data: ${JSON.stringify({ success: false, error: 'Stopped by User' })}\n\n`);
       break;
     }
 
-    const blitzBatch = recipients.slice(i, i + BLITZ_SIZE);
+    const rawRecipient = recipients[i];
+    const recipient = parseRecipientData(rawRecipient);
+    if (!recipient.email) continue;
 
-    const blitzTasks = blitzBatch.map(async (rawRecipient, idx) => {
-      if (globalSession.stopRequested) return;
+    if (deckIndex >= templateDeck.length) {
+      templateDeck = shuffleArray(templateDeck);
+      deckIndex = 0;
+    }
+    const selectedBodyLine = templateDeck[deckIndex++];
 
-      const recipient = parseRecipientData(rawRecipient);
-      if (!recipient.email) return;
+    try {
+      const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
+      const personalizedBody = personalizeContent(selectedBodyLine, recipient);
+      const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
 
-      if (deckIndex >= templateDeck.length) {
-        templateDeck = shuffleArray(templateDeck);
-        deckIndex = 0;
+      // Unique Message ID & Clean Headers to bypass spam filters safely
+      const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${senderDomain}>`;
+      
+      const plainTextContent = isHtml ? stripHtmlTags(personalizedBody) : personalizedBody;
+      const htmlContent = isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`;
+
+      const mailOptions = {
+        from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
+        to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
+        replyTo: cleanEmail,
+        subject: personalizedSubject,
+        textEncoding: 'quoted-printable',
+        headers: {
+          'Message-ID': uniqueMsgId,
+          'X-Mailer': 'Microsoft Outlook 16.0',
+          'X-Priority': '3',
+          'Importance': 'Normal'
+        },
+        text: plainTextContent,
+        html: htmlContent
+      };
+
+      await transporter.sendMail(mailOptions);
+
+      const successData = { success: true, recipient: recipient.email, name: recipient.name };
+      res.write(`data: ${JSON.stringify(successData)}\n\n`);
+
+      // Controlled natural delay between emails to protect account reputation
+      if (i < recipients.length - 1 && !globalSession.stopRequested) {
+        const randomDelay = Math.floor(Math.random() * 1000) + 1500; // 1.5s to 2.5s delay
+        await new Promise(resolve => setTimeout(resolve, randomDelay));
       }
-      const selectedBodyLine = templateDeck[deckIndex++];
 
-      try {
-        if (idx > 0) {
-          await new Promise(resolve => setTimeout(resolve, idx * 50));
-        }
-
-        const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
-        const personalizedBody = personalizeContent(selectedBodyLine, recipient);
-        const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
-
-        // Unique message tracking and anti-spam deliverability headers
-        const uniqueMsgId = `<${crypto.randomBytes(12).toString('hex')}.${Date.now()}@${senderDomain}>`;
-        
-        const plainTextContent = isHtml ? stripHtmlTags(personalizedBody) : personalizedBody;
-        const htmlContent = isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`;
-
-        const mailOptions = {
-          from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
-          to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
-          replyTo: cleanEmail,
-          subject: personalizedSubject,
-          textEncoding: 'quoted-printable',
-          headers: {
-            'Message-ID': uniqueMsgId,
-            'X-Mailer': 'Apple Mail (2.3654.120.2)',
-            'X-Priority': '3',
-            'Importance': 'Normal',
-            'X-Entity-Ref-ID': crypto.randomBytes(8).toString('hex')
-          },
-          text: plainTextContent,
-          html: htmlContent
-        };
-
-        await transporter.sendMail(mailOptions);
-
-        const successData = { success: true, recipient: recipient.email, name: recipient.name };
-        res.write(`data: ${JSON.stringify(successData)}\n\n`);
-
-      } catch (err) {
-        const failData = { success: false, recipient: recipient.email, error: err.message };
-        res.write(`data: ${JSON.stringify(failData)}\n\n`);
-      }
-    });
-
-    await Promise.allSettled(blitzTasks);
-
-    if (i + BLITZ_SIZE < recipients.length && !globalSession.stopRequested) {
-      await new Promise(resolve => setTimeout(resolve, 80));
+    } catch (err) {
+      const failData = { success: false, recipient: recipient.email, error: err.message };
+      res.write(`data: ${JSON.stringify(failData)}\n\n`);
     }
   }
 
@@ -365,7 +355,7 @@ app.post('/api/stop', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 High-Speed Inbox Mailer running on port ${PORT}`);
+  console.log(`🚀 Secure Inbox Mailer running on port ${PORT}`);
 });
 
 export default app;
