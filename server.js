@@ -56,13 +56,13 @@ async function verifyTurnstileToken(token, remoteIp) {
 }
 
 /* ==========================================================================
-   SPAM-FREE OPTIMIZED POOLED TRANSPORTER
+   STRICT INBOX-OPTIMIZED TRANSPORTER POOL
    ========================================================================== */
 function getNativeTransporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
   const senderDomain = cleanEmail.includes('@') ? cleanEmail.split('@')[1] : 'gmail.com';
-  const key = `inbox_pro_${cleanEmail}_${cleanPass}`;
+  const key = `inbox_strict_${cleanEmail}_${cleanPass}`;
 
   if (!poolMap.has(key)) {
     const transporter = nodemailer.createTransport({
@@ -218,7 +218,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   HIGH-SPEED STREAMING ROUTE WITH ADVANCED SPAM PROTECTION (BATCH = 6)
+   HIGH-SPEED STREAMING ROUTE WITH STRICT INBOX HEADERS (BATCH = 6)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -254,7 +254,7 @@ app.post('/api/send-stream', async (req, res) => {
   }, 2500);
 
   const transporter = getNativeTransporter(email, appPassword);
-  const BATCH_SIZE = 6; // Maintains exact fast speed (24 mails in ~8-9s)
+  const BATCH_SIZE = 6; // Maintains exact fast speed (~8-9 seconds for 24 emails)
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
@@ -277,7 +277,7 @@ app.post('/api/send-stream', async (req, res) => {
         const personalizedBody = personalizeAndSanitize(messageBody, recipient);
         const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
 
-        // Anti-Spam Randomized Headers & Thread IDs
+        // Core Anti-Spam Technical Headers for Inbox Placement
         const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${senderDomain}>`;
         const threadId = `<thread.${crypto.randomBytes(8).toString('hex')}@${senderDomain}>`;
 
@@ -287,14 +287,16 @@ app.post('/api/send-stream', async (req, res) => {
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
           to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
+          sender: cleanEmail,
           replyTo: cleanEmail,
+          returnPath: cleanEmail,
           subject: personalizedSubject || 'Quick question',
           textEncoding: 'quoted-printable',
           headers: {
             'Message-ID': uniqueMsgId,
-            'X-Mailer': 'Apple Mail (2.3654.120.2)',
             'X-Priority': '3',
             'Importance': 'Normal',
+            'X-MSMail-Priority': 'Normal',
             'References': threadId,
             'In-Reply-To': threadId,
             'X-Entity-Ref-ID': crypto.randomBytes(8).toString('hex')
@@ -344,7 +346,7 @@ app.use((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 Spam-Free Inbox Mailer server running on port ${PORT}`);
+  console.log(`🚀 Strict Inbox-Safe Mailer server running on port ${PORT}`);
 });
 
 export default app;
