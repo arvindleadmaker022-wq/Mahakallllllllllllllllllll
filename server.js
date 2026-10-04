@@ -4,6 +4,7 @@ import nodemailer from 'nodemailer';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,15 +22,13 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 /* ==========================================================================
-   1. CLEAN DIRECT GMAIL TRANSPORTER (NO PROXY, PROPER POOL REUSE)
+   1. HIGH-SPEED OPTIMIZED GMAIL TRANSPORTER
    ========================================================================== */
 function closeAllPools() {
   for (const [key, transporter] of poolMap.entries()) {
     try {
       transporter.close();
-    } catch (e) {
-      // Ignore close errors
-    }
+    } catch (e) {}
     poolMap.delete(key);
   }
 }
@@ -40,14 +39,11 @@ function getNativeTransporter(email, appPassword) {
   const senderDomain = cleanEmail.includes('@') ? cleanEmail.split('@')[1] : 'gmail.com';
   const key = `native_${cleanEmail}_${cleanPass}`;
 
-  // Close old pool if switching to a different Gmail account
   for (const [existingKey, existingTransporter] of poolMap.entries()) {
     if (existingKey !== key) {
       try {
         existingTransporter.close();
-      } catch (e) {
-        // Ignore
-      }
+      } catch (e) {}
       poolMap.delete(existingKey);
     }
   }
@@ -63,8 +59,8 @@ function getNativeTransporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 4,
-      maxMessages: 100,
+      maxConnections: 5, // High speed parallel connections
+      maxMessages: 150,
       socketTimeout: 30000,
       connectionTimeout: 30000,
       tls: {
@@ -247,7 +243,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   4. NON-STOP STREAMING ROUTE (BLITZ SIZE = 4)
+   4. HIGH-SPEED INBOX-OPTIMIZED STREAMING ROUTE (BLITZ SIZE = 4)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -265,14 +261,13 @@ app.post('/api/send-stream', async (req, res) => {
 
   const cleanEmail = email.toLowerCase().trim();
   const cleanSenderName = (senderName || '').replace(/["\r\n]/g, '').trim();
+  const senderDomain = cleanEmail.split('@')[1] || 'gmail.com';
   globalSession.stopRequested = false;
 
   const keepAlivePing = setInterval(() => {
     try {
       res.write(': keep-alive\n\n');
-    } catch (e) {
-      // Ignored
-    }
+    } catch (e) {}
   }, 2500);
 
   const defaultSubject = '{Quick question|Site Overview|Quick note}';
@@ -284,7 +279,6 @@ app.post('/api/send-stream', async (req, res) => {
   let templateDeck = extractTemplateDeck(rawBodyTemplate);
   let deckIndex = 0;
 
-  // Single shared connection pool for the entire session (fixes per-email login flood)
   const transporter = getNativeTransporter(email, appPassword);
   const BLITZ_SIZE = 4;
 
@@ -310,12 +304,18 @@ app.post('/api/send-stream', async (req, res) => {
 
       try {
         if (idx > 0) {
-          await new Promise(resolve => setTimeout(resolve, idx * 90));
+          await new Promise(resolve => setTimeout(resolve, idx * 50));
         }
 
         const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
         const personalizedBody = personalizeContent(selectedBodyLine, recipient);
         const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
+
+        // Unique message tracking and anti-spam deliverability headers
+        const uniqueMsgId = `<${crypto.randomBytes(12).toString('hex')}.${Date.now()}@${senderDomain}>`;
+        
+        const plainTextContent = isHtml ? stripHtmlTags(personalizedBody) : personalizedBody;
+        const htmlContent = isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`;
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
@@ -323,8 +323,15 @@ app.post('/api/send-stream', async (req, res) => {
           replyTo: cleanEmail,
           subject: personalizedSubject,
           textEncoding: 'quoted-printable',
-          text: isHtml ? stripHtmlTags(personalizedBody) : personalizedBody,
-          html: isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`
+          headers: {
+            'Message-ID': uniqueMsgId,
+            'X-Mailer': 'Apple Mail (2.3654.120.2)',
+            'X-Priority': '3',
+            'Importance': 'Normal',
+            'X-Entity-Ref-ID': crypto.randomBytes(8).toString('hex')
+          },
+          text: plainTextContent,
+          html: htmlContent
         };
 
         await transporter.sendMail(mailOptions);
@@ -341,7 +348,7 @@ app.post('/api/send-stream', async (req, res) => {
     await Promise.allSettled(blitzTasks);
 
     if (i + BLITZ_SIZE < recipients.length && !globalSession.stopRequested) {
-      await new Promise(resolve => setTimeout(resolve, 180));
+      await new Promise(resolve => setTimeout(resolve, 80));
     }
   }
 
@@ -358,7 +365,7 @@ app.post('/api/stop', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Non-stop Blitz Mailer running on port ${PORT}`);
+  console.log(`🚀 High-Speed Inbox Mailer running on port ${PORT}`);
 });
 
 export default app;
