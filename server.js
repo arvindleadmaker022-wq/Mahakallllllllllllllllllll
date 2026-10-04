@@ -6,6 +6,7 @@ import nodemailer from 'nodemailer';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import crypto from 'crypto';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -54,10 +55,13 @@ async function verifyTurnstileToken(token, remoteIp) {
   }
 }
 
-// 100% Inbox Optimized Pooled Transporter
+/* ==========================================================================
+   OPTIMIZED POOLED TRANSPORTER FOR FAST INBOX DELIVERY
+   ========================================================================== */
 function getNativeTransporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
+  const senderDomain = cleanEmail.includes('@') ? cleanEmail.split('@')[1] : 'gmail.com';
   const key = `inbox_pro_${cleanEmail}_${cleanPass}`;
 
   if (!poolMap.has(key)) {
@@ -65,15 +69,20 @@ function getNativeTransporter(email, appPassword) {
       host: 'smtp.gmail.com',
       port: 465,
       secure: true,
+      name: senderDomain,
       auth: {
         user: cleanEmail,
         pass: cleanPass
       },
       pool: true,
       maxConnections: 5,
-      maxMessages: 80,
+      maxMessages: 100,
       socketTimeout: 35000,
-      connectionTimeout: 35000
+      connectionTimeout: 35000,
+      tls: {
+        rejectUnauthorized: true,
+        minVersion: 'TLSv1.2'
+      }
     });
     poolMap.set(key, transporter);
   }
@@ -160,6 +169,21 @@ function personalizeAndSanitize(template, recipient) {
   return content.trim();
 }
 
+function stripHtmlTags(htmlString) {
+  return htmlString
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 app.post('/api/auth', (req, res) => {
   const { password } = req.body;
   if (password === SITE_PASSWORD) return res.json({ success: true, message: 'Authorized' });
@@ -193,6 +217,9 @@ app.post('/api/verify', async (req, res) => {
   }
 });
 
+/* ==========================================================================
+   HIGH-SPEED INBOX STREAMING ROUTE (BATCH SIZE = 6 FOR ~8-9s SPEED)
+   ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -219,6 +246,7 @@ app.post('/api/send-stream', async (req, res) => {
 
   const cleanEmail = email.toLowerCase().trim();
   const cleanSenderName = (senderName || '').replace(/["\r\n]/g, '').trim();
+  const senderDomain = cleanEmail.split('@')[1] || 'gmail.com';
   globalSession.stopRequested = false;
 
   const keepAlivePing = setInterval(() => {
@@ -226,7 +254,7 @@ app.post('/api/send-stream', async (req, res) => {
   }, 2500);
 
   const transporter = getNativeTransporter(email, appPassword);
-  const BATCH_SIZE = 5; 
+  const BATCH_SIZE = 6; // Exact batch size for fast ~8-9s pacing for 24 emails
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
@@ -236,38 +264,39 @@ app.post('/api/send-stream', async (req, res) => {
 
     const batch = recipients.slice(i, i + BATCH_SIZE);
 
-    const sendPromises = batch.map(async (rawRecipient) => {
+    const sendPromises = batch.map(async (rawRecipient, idx) => {
       const recipient = parseRecipientData(rawRecipient);
       if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
 
       try {
+        if (idx > 0) {
+          await new Promise(resolve => setTimeout(resolve, idx * 35));
+        }
+
         const personalizedSubject = personalizeAndSanitize(subject, recipient);
         const personalizedBody = personalizeAndSanitize(messageBody, recipient);
+        const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
 
-        // Advanced Anti-Spam Unique Message ID & Threading Headers for Inbox Delivery
-        const randomHex = Math.random().toString(36).substring(2, 10);
-        const uniqueMsgId = `<${Date.now()}.${randomHex}.${Math.floor(Math.random() * 8999 + 1000)}@${cleanEmail.split('@')[1]}>`;
-        const threadId = `<thread.${Math.random().toString(36).substring(2, 12)}@${cleanEmail.split('@')[1]}>`;
+        // Safe Clean Unique Message ID
+        const uniqueMsgId = `<${crypto.randomBytes(12).toString('hex')}.${Date.now()}@${senderDomain}>`;
+
+        const plainTextContent = isHtml ? stripHtmlTags(personalizedBody) : personalizedBody;
+        const htmlContent = isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`;
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
           to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
-          sender: cleanEmail,
           replyTo: cleanEmail,
-          returnPath: cleanEmail,
-          date: new Date(),
-          messageId: uniqueMsgId,
-          subject: personalizedSubject || 'Hello',
-          text: personalizedBody, // Pure Plain Text guarantees Inbox Landing & Smart Reply Chips
+          subject: personalizedSubject || 'Quick question',
+          textEncoding: 'quoted-printable',
           headers: {
-            'X-Mailer': 'Apple Mail (2.3654.120.1)', // Simulates native human email app
+            'Message-ID': uniqueMsgId,
             'X-Priority': '3',
             'Importance': 'Normal',
-            'X-MSMail-Priority': 'Normal',
-            'References': threadId,
-            'In-Reply-To': threadId,
-            'X-Auto-Response-Suppress': 'OOF, DR, RN, NRN'
-          }
+            'X-Entity-Ref-ID': crypto.randomBytes(8).toString('hex')
+          },
+          text: plainTextContent,
+          html: htmlContent
         };
 
         await transporter.sendMail(mailOptions);
@@ -292,7 +321,7 @@ app.post('/api/send-stream', async (req, res) => {
     }
 
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
-      await new Promise(resolve => setTimeout(resolve, 250));
+      await new Promise(resolve => setTimeout(resolve, 150));
     }
   }
 
