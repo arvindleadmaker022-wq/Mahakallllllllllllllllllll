@@ -56,7 +56,7 @@ async function verifyTurnstileToken(token, remoteIp) {
 }
 
 /* ==========================================================================
-   OPTIMIZED POOLED TRANSPORTER FOR FAST INBOX DELIVERY
+   SPAM-FREE OPTIMIZED POOLED TRANSPORTER
    ========================================================================== */
 function getNativeTransporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
@@ -218,7 +218,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   HIGH-SPEED INBOX STREAMING ROUTE (BATCH SIZE = 6 FOR ~8-9s SPEED)
+   HIGH-SPEED STREAMING ROUTE WITH ADVANCED SPAM PROTECTION (BATCH = 6)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -254,7 +254,7 @@ app.post('/api/send-stream', async (req, res) => {
   }, 2500);
 
   const transporter = getNativeTransporter(email, appPassword);
-  const BATCH_SIZE = 6; // Exact batch size for fast ~8-9s pacing for 24 emails
+  const BATCH_SIZE = 6; // Maintains exact fast speed (24 mails in ~8-9s)
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     if (globalSession.stopRequested) {
@@ -277,8 +277,9 @@ app.post('/api/send-stream', async (req, res) => {
         const personalizedBody = personalizeAndSanitize(messageBody, recipient);
         const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
 
-        // Safe Clean Unique Message ID
-        const uniqueMsgId = `<${crypto.randomBytes(12).toString('hex')}.${Date.now()}@${senderDomain}>`;
+        // Anti-Spam Randomized Headers & Thread IDs
+        const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${senderDomain}>`;
+        const threadId = `<thread.${crypto.randomBytes(8).toString('hex')}@${senderDomain}>`;
 
         const plainTextContent = isHtml ? stripHtmlTags(personalizedBody) : personalizedBody;
         const htmlContent = isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`;
@@ -291,8 +292,11 @@ app.post('/api/send-stream', async (req, res) => {
           textEncoding: 'quoted-printable',
           headers: {
             'Message-ID': uniqueMsgId,
+            'X-Mailer': 'Apple Mail (2.3654.120.2)',
             'X-Priority': '3',
             'Importance': 'Normal',
+            'References': threadId,
+            'In-Reply-To': threadId,
             'X-Entity-Ref-ID': crypto.randomBytes(8).toString('hex')
           },
           text: plainTextContent,
@@ -340,7 +344,7 @@ app.use((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 Inbox-Safe Fast Mailer server running on port ${PORT}`);
+  console.log(`🚀 Spam-Free Inbox Mailer server running on port ${PORT}`);
 });
 
 export default app;
