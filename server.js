@@ -24,6 +24,7 @@ const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '1x000000000000
 const globalSession = { stopRequested: false };
 const poolMap = new Map();
 
+// Express Configuration
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
@@ -33,10 +34,14 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {});
 });
 
+/* ==========================================================================
+   TURNSTILE BOT PROTECTION VERIFICATION
+   ========================================================================== */
 async function verifyTurnstileToken(token, remoteIp) {
   if (!token || TURNSTILE_SECRET_KEY.startsWith('1x0000000000000000000000000000000AA')) {
     return true;
   }
+
   try {
     const formData = new URLSearchParams();
     formData.append('secret', TURNSTILE_SECRET_KEY);
@@ -50,11 +55,14 @@ async function verifyTurnstileToken(token, remoteIp) {
     });
     const outcome = await result.json();
     return outcome.success === true;
-  } catch {
+  } catch (error) {
     return false;
   }
 }
 
+/* ==========================================================================
+   GMAIL TLS TRANSPORTER POOL (Port 587 STARTTLS + Anti-Drop Config)
+   ========================================================================== */
 function getPort587Transporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
@@ -65,7 +73,7 @@ function getPort587Transporter(email, appPassword) {
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
-      secure: false,
+      secure: false, // STARTTLS
       requireTLS: true,
       name: senderDomain,
       auth: {
@@ -87,6 +95,9 @@ function getPort587Transporter(email, appPassword) {
   return poolMap.get(key);
 }
 
+/* ==========================================================================
+   RECIPIENT NORMALIZATION & ADVANCED SPINTAX ENGINE
+   ========================================================================== */
 function parseRecipientData(input) {
   let email = '';
   let rawName = '';
@@ -185,6 +196,9 @@ function createCleanPlainText(text) {
     .trim();
 }
 
+/* ==========================================================================
+   API ROUTES
+   ========================================================================== */
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
@@ -222,6 +236,9 @@ app.post('/api/verify', async (req, res) => {
   }
 });
 
+/* ==========================================================================
+   PRIMARY INBOX STREAMING ROUTE (Zero Spam Flags + High Speed)
+   ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -292,6 +309,7 @@ app.post('/api/send-stream', async (req, res) => {
         const formattedHtml = `<div dir="ltr">${cleanBodyText}</div>`;
         const plainTextFormatted = createCleanPlainText(personalizedBody);
 
+        // Anti-Spam unique metadata headers for pure inbox placement
         const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${senderDomain}>`;
         const threadId = `<thread.${crypto.randomBytes(8).toString('hex')}@${senderDomain}>`;
 
@@ -358,7 +376,7 @@ app.post('/api/stop', (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 Secure Mail Console running on port ${PORT}`);
+  console.log(`🚀 Spam-Free Mailer server running on port ${PORT}`);
 });
 
 export default app;
