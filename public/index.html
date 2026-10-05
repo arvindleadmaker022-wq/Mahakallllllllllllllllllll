@@ -9,7 +9,6 @@
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
-    <script src="/socket.io/socket.io.js"></script>
 </head>
 <body>
     <!-- Password Gate Overlay -->
@@ -20,7 +19,7 @@
             </div>
             <h2>Secure Gateway</h2>
             <p>Enter your authorization code to launch console</p>
-            <form id="gate-form" autocomplete="off" onsubmit="return false;">
+            <form id="gate-form" autocomplete="off">
                 <div class="form-group">
                     <div class="password-wrapper">
                         <input type="password" id="gate-password" placeholder="Enter security password..." autocomplete="current-password" required>
@@ -31,7 +30,7 @@
                 </div>
                 <div id="gate-error" class="gate-error hidden">
                     <i class="fa-solid fa-triangle-exclamation"></i>
-                    <span>Incorrect password (Try Y##)</span>
+                    <span>Incorrect password</span>
                 </div>
                 <button type="submit" id="gate-submit-btn" class="btn btn-primary btn-block">
                     <i class="fa-solid fa-arrow-right-to-bracket"></i> Authenticate
