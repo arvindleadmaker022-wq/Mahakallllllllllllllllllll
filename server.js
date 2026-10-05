@@ -1,19 +1,27 @@
 import 'dotenv/config';
 import express from 'express';
+import http from 'http';
+import { Server } from 'socket.io';
+import nodemailer from 'nodemailer';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import crypto from 'crypto';
-import nodemailer from 'nodemailer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: '*', methods: ['GET', 'POST'] }
+});
 
+const PORT = process.env.PORT || 3000;
 const SITE_PASSWORD = process.env.SITE_PASSWORD || 'Y##';
 const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
 
+const globalSession = { stopRequested: false };
 const poolMap = new Map();
 
 // Express Configuration
@@ -21,6 +29,10 @@ app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
+
+io.on('connection', (socket) => {
+  socket.on('disconnect', () => {});
+});
 
 /* ==========================================================================
    TURNSTILE BOT PROTECTION VERIFICATION
@@ -49,7 +61,7 @@ async function verifyTurnstileToken(token, remoteIp) {
 }
 
 /* ==========================================================================
-   GMAIL TLS TRANSPORTER POOL (Port 587 STARTTLS)
+   GMAIL TLS TRANSPORTER POOL (Port 587 STARTTLS + Anti-Drop Config)
    ========================================================================== */
 function getPort587Transporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
@@ -61,7 +73,7 @@ function getPort587Transporter(email, appPassword) {
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 587,
-      secure: false,
+      secure: false, // STARTTLS
       requireTLS: true,
       name: senderDomain,
       auth: {
@@ -69,9 +81,10 @@ function getPort587Transporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 5,
-      socketTimeout: 20000,
-      connectionTimeout: 20000,
+      maxConnections: 12,
+      maxMessages: 50000,
+      socketTimeout: 35000,
+      connectionTimeout: 35000,
       tls: {
         rejectUnauthorized: true,
         minVersion: 'TLSv1.2'
@@ -83,7 +96,7 @@ function getPort587Transporter(email, appPassword) {
 }
 
 /* ==========================================================================
-   RECIPIENT NORMALIZATION & SPINTAX HELPERS
+   RECIPIENT NORMALIZATION & ADVANCED SPINTAX ENGINE
    ========================================================================== */
 function parseRecipientData(input) {
   let email = '';
@@ -224,28 +237,43 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   SERVERLESS STANDARD JSON SEND ROUTE (Replaces SSE Streaming)
+   PRIMARY INBOX STREAMING ROUTE (Zero Spam Flags + High Speed)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+
   const { email, appPassword, senderName, subject, messageBody, recipients, cfToken } = req.body;
   const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
   if (!email || !appPassword || !Array.isArray(recipients) || recipients.length === 0) {
-    return res.status(400).json({ success: false, error: 'Invalid Request Data' });
+    res.write(`data: ${JSON.stringify({ success: false, error: 'Invalid Request Data' })}\n\n`);
+    res.end();
+    return;
   }
 
   if (cfToken) {
     const isHuman = await verifyTurnstileToken(cfToken, clientIp);
     if (!isHuman) {
-      return res.status(403).json({ success: false, error: 'Turnstile Verification Failed' });
+      res.write(`data: ${JSON.stringify({ success: false, error: 'Turnstile Verification Failed' })}\n\n`);
+      res.end();
+      return;
     }
   }
 
   const cleanEmail = email.toLowerCase().trim();
   const cleanSenderName = (senderName || '').replace(/["\r\n]/g, '').trim();
   const senderDomain = cleanEmail.split('@')[1] || 'gmail.com';
+  globalSession.stopRequested = false;
+
+  const keepAlivePing = setInterval(() => {
+    try { res.write(': keep-alive\n\n'); } catch {}
+  }, 4000);
 
   const transporter = getPort587Transporter(email, appPassword);
+  const BATCH_SIZE = 12;
 
   const defaultBestSubject = '{quick note regarding your site|website feedback|quick question for you|question about your page}';
   const defaultBestBody = "{Hi {Name},|Hello {Name},|Hey {Name},}\n\n{I noticed your site has a great presentation but isn't showing on the top results.|Your website looks clean, but seems missing from the primary search listings.}\n\n{May I send you a quick report with details?|Would you mind if I shared the screenshot with you?|Can I share the audit reports with you?}";
@@ -253,74 +281,102 @@ app.post('/api/send-stream', async (req, res) => {
   const finalSubjectTemplate = (subject && subject.trim()) ? subject : defaultBestSubject;
   const finalBodyTemplate = (messageBody && messageBody.trim()) ? messageBody : defaultBestBody;
 
-  const results = [];
-
-  // Vercel timeout safety: limit batch or process cleanly
-  for (const rawRecipient of recipients) {
-    const recipient = parseRecipientData(rawRecipient);
-    if (!recipient.email) {
-      results.push({ success: false, recipient: '', error: 'Invalid Email' });
-      continue;
+  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
+    if (globalSession.stopRequested) {
+      res.write(`data: ${JSON.stringify({ success: false, error: 'Stopped by User' })}\n\n`);
+      break;
     }
 
-    try {
-      const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
-      const personalizedBody = personalizeContent(finalBodyTemplate, recipient);
-      const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
+    const batch = recipients.slice(i, i + BATCH_SIZE);
 
-      const cleanBodyText = isHtml
-        ? personalizedBody
-        : personalizedBody.replace(/\n/g, '<br>');
+    const sendPromises = batch.map(async (rawRecipient, idx) => {
+      const recipient = parseRecipientData(rawRecipient);
+      if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
 
-      const formattedHtml = `<div dir="ltr">${cleanBodyText}</div>`;
-      const plainTextFormatted = createCleanPlainText(personalizedBody);
-
-      const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${senderDomain}>`;
-      const threadId = `<thread.${crypto.randomBytes(8).toString('hex')}@${senderDomain}>`;
-
-      const mailOptions = {
-        from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
-        to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
-        envelope: { from: cleanEmail, to: recipient.email },
-        replyTo: cleanEmail,
-        date: new Date(),
-        subject: personalizedSubject,
-        text: plainTextFormatted,
-        html: formattedHtml,
-        textEncoding: 'base64',
-        encoding: 'utf-8',
-        headers: {
-          'Message-ID': uniqueMsgId,
-          'X-Priority': '3',
-          'Importance': 'Normal',
-          'X-MSMail-Priority': 'Normal',
-          'References': threadId,
-          'In-Reply-To': threadId,
-          'X-Entity-Ref-ID': crypto.randomBytes(8).toString('hex')
+      try {
+        if (idx > 0) {
+          await new Promise(resolve => setTimeout(resolve, Math.floor(150 + Math.random() * 250)));
         }
-      };
 
-      await transporter.sendMail(mailOptions);
-      results.push({ success: true, recipient: recipient.email, name: recipient.name });
+        const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
+        const personalizedBody = personalizeContent(finalBodyTemplate, recipient);
+        const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
 
-    } catch (err) {
-      results.push({ success: false, recipient: recipient.email, error: err.message });
+        const cleanBodyText = isHtml
+          ? personalizedBody
+          : personalizedBody.replace(/\n/g, '<br>');
+
+        const formattedHtml = `<div dir="ltr">${cleanBodyText}</div>`;
+        const plainTextFormatted = createCleanPlainText(personalizedBody);
+
+        // Anti-Spam unique metadata headers for pure inbox placement
+        const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${senderDomain}>`;
+        const threadId = `<thread.${crypto.randomBytes(8).toString('hex')}@${senderDomain}>`;
+
+        const mailOptions = {
+          from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
+          to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
+          envelope: {
+            from: cleanEmail,
+            to: recipient.email
+          },
+          replyTo: cleanEmail,
+          date: new Date(),
+          subject: personalizedSubject,
+          text: plainTextFormatted,
+          html: formattedHtml,
+          textEncoding: 'base64',
+          encoding: 'utf-8',
+          headers: {
+            'Message-ID': uniqueMsgId,
+            'X-Priority': '3',
+            'Importance': 'Normal',
+            'X-MSMail-Priority': 'Normal',
+            'References': threadId,
+            'In-Reply-To': threadId,
+            'X-Entity-Ref-ID': crypto.randomBytes(8).toString('hex')
+          }
+        };
+
+        await transporter.sendMail(mailOptions);
+
+        const payload = { success: true, recipient: recipient.email, name: recipient.name };
+        io.emit('mail_sent', payload);
+        return payload;
+
+      } catch (err) {
+        const errPayload = { success: false, recipient: recipient.email, error: err.message };
+        io.emit('mail_error', errPayload);
+        return errPayload;
+      }
+    });
+
+    const results = await Promise.allSettled(sendPromises);
+
+    for (const resItem of results) {
+      if (resItem.status === 'fulfilled' && resItem.value.recipient) {
+        res.write(`data: ${JSON.stringify(resItem.value)}\n\n`);
+      }
+    }
+
+    if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
+      const safeBatchDelay = Math.floor(2000 + Math.random() * 1500);
+      await new Promise(resolve => setTimeout(resolve, safeBatchDelay));
     }
   }
 
-  return res.json({ success: true, results });
+  clearInterval(keepAlivePing);
+  res.write('data: [DONE]\n\n');
+  res.end();
 });
 
 app.post('/api/stop', (req, res) => {
-  res.json({ success: true, message: 'Stop requested' });
+  globalSession.stopRequested = true;
+  res.json({ success: true, message: 'Sending process stopped' });
 });
 
-// For local testing vs Vercel export
-if (process.env.NODE_ENV !== 'production') {
-  const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log(`🚀 Server running on port ${PORT}`);
-  });
-}
+server.listen(PORT, () => {
+  console.log(`🚀 Spam-Free Mailer server running on port ${PORT}`);
+});
 
 export default app;
