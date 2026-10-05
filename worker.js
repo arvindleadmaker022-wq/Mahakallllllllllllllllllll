@@ -55,7 +55,7 @@ export default {
         });
       }
 
-      return new Response("Not Found", { status: 404, headers: corsHeaders });
+      return new Response("Not Found", { status: 404, headers: corsHeaders }); 
     } catch (err) {
       return new Response(JSON.stringify({ success: false, message: err.message }), {
         status: 500,
