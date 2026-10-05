@@ -52,8 +52,6 @@ textarea { resize: vertical; min-height: 120px; }
 .card-header-flex { display: flex; justify-content: space-between; align-items: center; }
 .badge { background: rgba(59, 130, 246, 0.15); color: #60a5fa; padding: 4px 10px; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
 
-.error-message { color: #fca5a5; font-size: 0.85rem; margin-top: 0.75rem; display: flex; align-items: center; gap: 0.4rem; background: rgba(239, 68, 68, 0.1); padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(239, 68, 68, 0.2); }
-
 .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; margin-bottom: 1.25rem; }
 .stat-box { background: rgba(15, 23, 42, 0.5); padding: 0.75rem; border-radius: var(--radius-md); text-align: center; border: 1px solid var(--border-color); }
 .stat-label { display: block; font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; font-weight: 600; margin-bottom: 2px; }
