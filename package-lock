@@ -3904,7 +3904,7 @@
       },
       "funding": {
         "type": "opencollective",
-        "url": "https://opencollective.com/express"
+        "url": "https://opencollective.com/express" 
       }
     }
   }
