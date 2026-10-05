@@ -210,6 +210,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
 
+            isSending = false;
             if (stopRequested) {
                 statusIcon.className = 'fa-solid fa-circle-stop text-danger';
                 statusText.textContent = 'Mission aborted by user.';
@@ -221,8 +222,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (err) {
             console.error('Send error:', err);
             alert('Connection error occurred during transmission.');
-            statusIcon.className = 'fa-solid fa-triangle-exclamation text-danger';
-            statusText.textContent = 'Transmission error occurred.';
         } finally {
             isSending = false;
             finishSendingUI();
