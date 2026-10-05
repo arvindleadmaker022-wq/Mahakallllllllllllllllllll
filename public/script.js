@@ -1,285 +1,125 @@
-document.addEventListener('DOMContentLoaded', () => {
-    const passwordGate = document.getElementById('password-gate');
-    const mainApp = document.getElementById('main-app');
-    const gateForm = document.getElementById('gate-form');
-    const gatePassword = document.getElementById('gate-password');
-    const gateError = document.getElementById('gate-error');
-    const gateSubmitBtn = document.getElementById('gate-submit-btn');
-    const toggleGatePassword = document.getElementById('toggle-gate-password');
-    const logoutBtn = document.getElementById('logout-btn');
+const socket = io();
 
-    if (sessionStorage.getItem('authenticated') === 'true') {
-        passwordGate.classList.add('hidden');
-        mainApp.classList.remove('hidden');
+document.getElementById('auth-btn').addEventListener('click', async () => {
+  const password = document.getElementById('site-password').value;
+  try {
+    const res = await fetch('/api/auth', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password })
+    });
+    const data = await res.json();
+    if (data.success) {
+      document.getElementById('auth-section').classList.add('hidden');
+      document.getElementById('app-section').classList.remove('hidden');
     } else {
-        passwordGate.classList.remove('hidden');
-        mainApp.classList.add('hidden');
+      alert('Invalid Password');
     }
+  } catch (err) {
+    alert('Authentication error');
+  }
+});
 
-    toggleGatePassword.addEventListener('click', () => {
-        const type = gatePassword.getAttribute('type') === 'password' ? 'text' : 'password';
-        gatePassword.setAttribute('type', type);
-        toggleGatePassword.innerHTML = type === 'password' ? '<i class="fa-regular fa-eye"></i>' : '<i class="fa-regular fa-eye-slash"></i>';
+document.getElementById('verify-btn').addEventListener('click', async () => {
+  const email = document.getElementById('smtp-email').value;
+  const appPassword = document.getElementById('smtp-pass').value;
+  
+  if (!email || !appPassword) {
+    alert('Please enter Gmail and App Password');
+    return;
+  }
+
+  const logBox = document.getElementById('live-log');
+  logBox.innerHTML += `<div>Verifying SMTP credentials...</div>`;
+
+  try {
+    const res = await fetch('/api/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, appPassword })
     });
-
-    gateForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const password = gatePassword.value.trim();
-        if (!password) return;
-
-        gateSubmitBtn.disabled = true;
-        gateSubmitBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Authenticating...';
-        gateError.classList.add('hidden');
-
-        try {
-            const response = await fetch('/api/auth', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password })
-            });
-
-            const result = await response.json();
-
-            if (result.success) {
-                sessionStorage.setItem('authenticated', 'true');
-                passwordGate.classList.add('hidden');
-                mainApp.classList.remove('hidden');
-            } else {
-                gateError.classList.remove('hidden');
-                gatePassword.value = '';
-                gatePassword.focus();
-            }
-        } catch (err) {
-            gateError.querySelector('span').textContent = 'Connection error. Try again.';
-            gateError.classList.remove('hidden');
-        } finally {
-            gateSubmitBtn.disabled = false;
-            gateSubmitBtn.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket"></i> Authenticate';
-        }
-    });
-
-    if (logoutBtn) {
-        logoutBtn.addEventListener('dblclick', () => {
-            sessionStorage.removeItem('authenticated');
-            window.location.reload();
-        });
+    const data = await res.json();
+    if (data.success) {
+      logBox.innerHTML += `<div style="color: #34d399;">✔ SMTP Verified Successfully!</div>`;
+    } else {
+      logBox.innerHTML += `<div style="color: #f87171;">✖ Verification Failed: ${data.message}</div>`;
     }
+  } catch (err) {
+    logBox.innerHTML += `<div style="color: #f87171;">✖ Network Error during verification</div>`;
+  }
+  logBox.scrollTop = logBox.scrollHeight;
+});
 
-    const dashboardEmail = document.getElementById('dashboard-email');
-    const dashboardPassword = document.getElementById('dashboard-password');
-    const togglePasswordBtn = document.getElementById('toggle-password');
-    const senderName = document.getElementById('sender-name');
-    const subject = document.getElementById('subject');
-    const messageBody = document.getElementById('message-body');
-    const recipientsInput = document.getElementById('recipients-input');
-    const detectedCount = document.getElementById('detected-count');
-    const emailValidationError = document.getElementById('email-validation-error');
+document.getElementById('send-btn').addEventListener('click', async () => {
+  const email = document.getElementById('smtp-email').value;
+  const appPassword = document.getElementById('smtp-pass').value;
+  const senderName = document.getElementById('sender-name').value;
+  const subject = document.getElementById('email-subject').value;
+  const messageBody = document.getElementById('email-body').value;
+  const rawRecipients = document.getElementById('recipients-list').value;
 
-    const statTotal = document.getElementById('stat-total');
-    const statSent = document.getElementById('stat-sent');
-    const statFailed = document.getElementById('stat-failed');
-    const statRemaining = document.getElementById('stat-remaining');
-    const progressBar = document.getElementById('progress-bar');
-    const statusIcon = document.getElementById('status-icon');
-    const statusText = document.getElementById('status-text');
+  if (!email || !appPassword || !rawRecipients) {
+    alert('Required fields are missing.');
+    return;
+  }
 
-    const sendBtn = document.getElementById('send-btn');
-    const stopBtn = document.getElementById('stop-btn');
+  const recipients = rawRecipients.split('\n').map(r => r.trim()).filter(r => r.length > 0);
+  const logBox = document.getElementById('live-log');
+  logBox.innerHTML += `<div>🚀 Starting Campaign for ${recipients.length} recipients...</div>`;
 
-    let extractedEmails = [];
-    let isSending = false;
-    let stopRequested = false;
-
-    togglePasswordBtn.addEventListener('click', () => {
-        const type = dashboardPassword.getAttribute('type') === 'password' ? 'text' : 'password';
-        dashboardPassword.setAttribute('type', type);
-        togglePasswordBtn.innerHTML = type === 'password' ? '<i class="fa-regular fa-eye"></i>' : '<i class="fa-regular fa-eye-slash"></i>';
+  try {
+    const response = await fetch('/api/send-stream', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, appPassword, senderName, subject, messageBody, recipients })
     });
 
-    recipientsInput.addEventListener('input', extractEmails);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
 
-    function extractEmails() {
-        const text = recipientsInput.value;
-        if (!text.trim()) {
-            extractedEmails = [];
-            detectedCount.textContent = '0 found';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n\n');
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          const payloadStr = line.replace('data: ', '').trim();
+          if (payloadStr === '[DONE]') {
+            logBox.innerHTML += `<div style="color: #38bdf8;">✨ Campaign Completed Successfully.</div>`;
+            logBox.scrollTop = logBox.scrollHeight;
             return;
-        }
-
-        const emailRegex = /([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/gi;
-        const matches = text.match(emailRegex) || [];
-        extractedEmails = [...new Set(matches.map(e => e.toLowerCase().trim()))];
-
-        detectedCount.textContent = `${extractedEmails.length} found`;
-        if (extractedEmails.length > 0) {
-            emailValidationError.classList.add('hidden');
-        }
-    }
-
-    sendBtn.addEventListener('click', async () => {
-        if (isSending) return;
-
-        const emailVal = dashboardEmail.value.trim();
-        const appPasswordVal = dashboardPassword.value.trim();
-        const senderNameVal = senderName.value.trim();
-        const subjectVal = subject.value.trim();
-        const messageBodyVal = messageBody.value.trim();
-
-        if (!emailVal || !appPasswordVal || !senderNameVal || !subjectVal || !messageBodyVal) {
-            alert('Please complete all required form fields.');
-            return;
-        }
-
-        if (extractedEmails.length === 0) {
-            emailValidationError.classList.remove('hidden');
-            alert('Please enter valid recipient emails.');
-            return;
-        }
-
-        const recipientsToSend = [...extractedEmails];
-        const turnstileResponse = document.querySelector('[name="cf-turnstile-response"]')?.value || "";
-
-        sendBtn.disabled = true;
-        sendBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying SMTP...';
-
-        try {
-            const verifyRes = await fetch('/api/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email: emailVal, appPassword: appPasswordVal, cfToken: turnstileResponse })
-            });
-
-            const verifyResult = await verifyRes.json();
-            if (!verifyResult.success) {
-                alert(verifyResult.message || 'SMTP Authentication failed. Check your App Password.');
-                finishSendingUI();
-                return;
+          }
+          try {
+            const parsed = JSON.parse(payloadStr);
+            if (parsed.success) {
+              logBox.innerHTML += `<div style="color: #34d399;">✔ Sent to: ${parsed.recipient}</div>`;
+            } else if (parsed.error) {
+              logBox.innerHTML += `<div style="color: #f87171;">✖ Error: ${parsed.error}</div>`;
             }
-
-            startSendingUI(recipientsToSend.length);
-
-            let sentCount = 0;
-            let failedCount = 0;
-
-            const response = await fetch('/api/send-stream', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    email: emailVal,
-                    appPassword: appPasswordVal,
-                    senderName: senderNameVal,
-                    subject: subjectVal,
-                    messageBody: messageBodyVal,
-                    recipients: recipientsToSend,
-                    cfToken: turnstileResponse
-                })
-            });
-
-            if (!response.ok) throw new Error('Streaming connection failed.');
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            while (true) {
-                if (stopRequested) break;
-
-                const { done, value } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n\n');
-                buffer = lines.pop();
-
-                for (const line of lines) {
-                    if (line.startsWith('data: ')) {
-                        const dataStr = line.replace('data: ', '').trim();
-                        if (dataStr === '[DONE]') break;
-
-                        try {
-                            const event = JSON.parse(dataStr);
-                            if (event.success) {
-                                sentCount++;
-                                updateProgressUI(sentCount, failedCount, recipientsToSend.length, `Dispatched: ${event.recipient}`);
-                            } else {
-                                failedCount++;
-                                updateProgressUI(sentCount, failedCount, recipientsToSend.length, `Failed: ${event.recipient}`);
-                            }
-                        } catch (e) {}
-                    }
-                }
-            }
-
-            isSending = false;
-            if (stopRequested) {
-                statusIcon.className = 'fa-solid fa-circle-stop text-danger';
-                statusText.textContent = 'Mission aborted by user.';
-            } else {
-                statusIcon.className = 'fa-solid fa-circle-check text-success';
-                statusText.textContent = 'Batch dispatched successfully!';
-            }
-
-        } catch (err) {
-            console.error('Send error:', err);
-            alert('Connection error occurred during transmission.');
-        } finally {
-            isSending = false;
-            finishSendingUI();
+          } catch {}
+          logBox.scrollTop = logBox.scrollHeight;
         }
-    });
-
-    stopBtn.addEventListener('click', async () => {
-        stopRequested = true;
-        statusIcon.className = 'fa-solid fa-spinner fa-spin text-warning';
-        statusText.textContent = 'Aborting process...';
-        stopBtn.disabled = true;
-
-        try {
-            await fetch('/api/stop', { method: 'POST' });
-        } catch (e) {}
-    });
-
-    function startSendingUI(total) {
-        isSending = true;
-        stopRequested = false;
-
-        statTotal.textContent = total;
-        statSent.textContent = '0';
-        statFailed.textContent = '0';
-        statRemaining.textContent = total;
-        progressBar.style.width = '0%';
-
-        statusIcon.className = 'fa-solid fa-circle-notch fa-spin text-primary';
-        statusText.textContent = 'Launching emails...';
-
-        sendBtn.disabled = true; 
-        sendBtn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Launching...';
-        stopBtn.classList.remove('hidden');
-        stopBtn.disabled = false;
+      }
     }
+  } catch (err) {
+    logBox.innerHTML += `<div style="color: #f87171;">✖ Stream interrupted.</div>`;
+  }
+});
 
-    function updateProgressUI(sentCount, failedCount, total, customText) {
-        statSent.textContent = sentCount;
-        statFailed.textContent = failedCount;
+document.getElementById('stop-btn').addEventListener('click', async () => {
+  try {
+    await fetch('/api/stop', { method: 'POST' });
+    const logBox = document.getElementById('live-log');
+    logBox.innerHTML += `<div style="color: #fbbf24;">⚠ Campaign stop requested.</div>`;
+  } catch {}
+});
 
-        const remaining = Math.max(0, total - (sentCount + failedCount));
-        statRemaining.textContent = remaining;
+socket.on('mail_sent', (data) => {
+  // Real-time notification support
+});
 
-        const percentage = Math.min(100, Math.round(((sentCount + failedCount) / total) * 100));
-        progressBar.style.width = `${percentage}%`;
-
-        if (customText && statusText && isSending && !stopRequested) {
-            statusText.textContent = customText;
-        }
-    }
-
-    function finishSendingUI() {
-        sendBtn.disabled = false;
-        sendBtn.innerHTML = '<i class="fa-solid fa-rocket"></i> Launch Dispatch';
-        stopBtn.classList.add('hidden');
-
-        if (window.turnstile) {
-            try { window.turnstile.reset(); } catch (e) {}
-        }
-    }
+socket.on('mail_error', (data) => {
+  // Real-time error monitoring support
 });
