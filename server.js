@@ -367,7 +367,7 @@ app.post('/api/send-stream', async (req, res) => {
 
   clearInterval(keepAlivePing);
   res.write('data: [DONE]\n\n');
-  res.end();
+  res.end(); 
 });
 
 app.post('/api/stop', (req, res) => {
