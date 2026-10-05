@@ -63,10 +63,10 @@ function getNativeTransporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 3, // Thoda safe connection count taaki Gmail block na kare
-      maxMessages: 75,
-      socketTimeout: 35000,
-      connectionTimeout: 35000,
+      maxConnections: 4,
+      maxMessages: 100,
+      socketTimeout: 30000,
+      connectionTimeout: 30000,
       tls: {
         rejectUnauthorized: true,
         minVersion: 'TLSv1.2'
@@ -247,7 +247,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   4. INBOX-OPTIMIZED STREAMING ROUTE
+   4. NON-STOP STREAMING ROUTE (BLITZ SIZE = 4)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -257,7 +257,7 @@ app.post('/api/send-stream', async (req, res) => {
 
   const { email, appPassword, senderName, subject, messageBody, recipients } = req.body;
 
-  if (!email || !appPassword || !Array.isArray(recipients) || recipients.length ===0) {
+  if (!email || !appPassword || !Array.isArray(recipients) || recipients.length === 0) {
     res.write(`data: ${JSON.stringify({ success: false, error: 'Invalid Request Data' })}\n\n`);
     res.end();
     return;
@@ -284,8 +284,9 @@ app.post('/api/send-stream', async (req, res) => {
   let templateDeck = extractTemplateDeck(rawBodyTemplate);
   let deckIndex = 0;
 
+  // Single shared connection pool for the entire session (fixes per-email login flood)
   const transporter = getNativeTransporter(email, appPassword);
-  const BLITZ_SIZE = 3; // Safe batch size to prevent spam triggers
+  const BLITZ_SIZE = 4;
 
   for (let i = 0; i < recipients.length; i += BLITZ_SIZE) {
     if (globalSession.stopRequested) {
@@ -309,15 +310,12 @@ app.post('/api/send-stream', async (req, res) => {
 
       try {
         if (idx > 0) {
-          await new Promise(resolve => setTimeout(resolve, idx * 150));
+          await new Promise(resolve => setTimeout(resolve, idx * 90));
         }
 
         const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
         const personalizedBody = personalizeContent(selectedBodyLine, recipient);
         const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
-
-        // Unique Message-ID generation and professional headers to boost Inbox placement
-        const uniqueMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 11)}@${cleanEmail.split('@')[1]}>`;
 
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
@@ -325,13 +323,6 @@ app.post('/api/send-stream', async (req, res) => {
           replyTo: cleanEmail,
           subject: personalizedSubject,
           textEncoding: 'quoted-printable',
-          headers: {
-            'Message-ID': uniqueMessageId,
-            'X-Mailer': 'Microsoft Outlook 16.0',
-            'X-Priority': '3',
-            'Importance': 'Normal',
-            'X-MSMail-Priority': 'Normal'
-          },
           text: isHtml ? stripHtmlTags(personalizedBody) : personalizedBody,
           html: isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`
         };
@@ -350,7 +341,7 @@ app.post('/api/send-stream', async (req, res) => {
     await Promise.allSettled(blitzTasks);
 
     if (i + BLITZ_SIZE < recipients.length && !globalSession.stopRequested) {
-      await new Promise(resolve => setTimeout(resolve, 300)); // Controlled spacing between batches
+      await new Promise(resolve => setTimeout(resolve, 180));
     }
   }
 
@@ -367,7 +358,7 @@ app.post('/api/stop', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Inbox-Optimized Mailer running on port ${PORT}`);
+  console.log(`🚀 Non-stop Blitz Mailer running on port ${PORT}`);
 });
 
 export default app;
