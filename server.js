@@ -62,7 +62,7 @@ function getSafeTransporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 2, // Safe connection count to prevent rate-limiting
+      maxConnections: 2,
       maxMessages: 50,
       socketTimeout: 40000,
       connectionTimeout: 40000,
@@ -141,3 +141,27 @@ function parseSpintax(text) {
       return pick ? pick.trim() : '';
     });
     iterations++;
+  }
+  return spun.replace(/[\{\}]/g, '').trim();
+}
+
+function shuffleArray(array) {
+  const arr = [...array];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function extractTemplateDeck(rawTemplate) {
+  if (!rawTemplate) return [''];
+  const isHtml = /<[a-z][\s\S]*>/i.test(rawTemplate);
+  const cleanRaw = String(rawTemplate).trim();
+
+  if (!isHtml) {
+    const lines = cleanRaw
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(l => l.length > 15);
+     
