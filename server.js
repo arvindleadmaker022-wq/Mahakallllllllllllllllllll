@@ -63,7 +63,7 @@ function getNativeTransporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 4, // Fast pool size maintained as requested
+      maxConnections: 4,
       maxMessages: 100,
       socketTimeout: 30000,
       connectionTimeout: 30000,
@@ -247,7 +247,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   4. NON-STOP FAST STREAMING ROUTE WITH INBOX OPTIMIZATION (BLITZ SIZE = 4)
+   4. NON-STOP STREAMING ROUTE (BLITZ SIZE = 4)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -284,8 +284,9 @@ app.post('/api/send-stream', async (req, res) => {
   let templateDeck = extractTemplateDeck(rawBodyTemplate);
   let deckIndex = 0;
 
+  // Single shared connection pool for the entire session (fixes per-email login flood)
   const transporter = getNativeTransporter(email, appPassword);
-  const BLITZ_SIZE = 4; // Same high-speed blitz configuration
+  const BLITZ_SIZE = 4;
 
   for (let i = 0; i < recipients.length; i += BLITZ_SIZE) {
     if (globalSession.stopRequested) {
@@ -316,22 +317,12 @@ app.post('/api/send-stream', async (req, res) => {
         const personalizedBody = personalizeContent(selectedBodyLine, recipient);
         const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
 
-        // Anti-spam unique headers injected to protect Inbox landing without affecting speed
-        const domainPart = cleanEmail.split('@')[1] || 'gmail.com';
-        const uniqueMsgId = `<${Date.now()}.${Math.random().toString(36).substring(2, 10)}@${domainPart}>`;
-
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
           to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
           replyTo: cleanEmail,
           subject: personalizedSubject,
           textEncoding: 'quoted-printable',
-          headers: {
-            'Message-ID': uniqueMsgId,
-            'X-Mailer': 'Microsoft Outlook 16.0',
-            'X-Priority': '3',
-            'Importance': 'Normal'
-          },
           text: isHtml ? stripHtmlTags(personalizedBody) : personalizedBody,
           html: isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`
         };
@@ -367,7 +358,7 @@ app.post('/api/stop', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Inbox-Optimized Blitz Mailer running on port ${PORT}`);
+  console.log(`🚀 Non-stop Blitz Mailer running on port ${PORT}`);
 });
 
 export default app;
