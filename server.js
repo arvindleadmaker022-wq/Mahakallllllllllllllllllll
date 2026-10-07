@@ -10,7 +10,7 @@ const __dirname = path.dirname(__filename);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const SITE_PASSWORD = process.env.SITE_PASSWORD || 'A##';
+const SITE_PASSWORD = process.env.SITE_PASSWORD || 'Y##';
 
 const globalSession = { stopRequested: false };
 const poolMap = new Map();
