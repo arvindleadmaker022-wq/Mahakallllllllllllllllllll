@@ -40,14 +40,11 @@ function getNativeTransporter(email, appPassword) {
   const senderDomain = cleanEmail.includes('@') ? cleanEmail.split('@')[1] : 'gmail.com';
   const key = `native_${cleanEmail}_${cleanPass}`;
 
-  // Close old pool if switching to a different Gmail account
   for (const [existingKey, existingTransporter] of poolMap.entries()) {
     if (existingKey !== key) {
       try {
         existingTransporter.close();
-      } catch (e) {
-        // Ignore
-      }
+      } catch (e) {}
       poolMap.delete(existingKey);
     }
   }
@@ -65,8 +62,8 @@ function getNativeTransporter(email, appPassword) {
       pool: true,
       maxConnections: 4,
       maxMessages: 100,
-      socketTimeout: 30000,
-      connectionTimeout: 30000,
+      socketTimeout: 25000,
+      connectionTimeout: 25000,
       tls: {
         rejectUnauthorized: true,
         minVersion: 'TLSv1.2'
@@ -162,4 +159,30 @@ function extractTemplateDeck(rawTemplate) {
 
   if (!isHtml) {
     const lines = cleanRaw
-      .split
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(l => l.length > 15);
+
+    const looksLikeVariationList =
+      lines.length >= 2 &&
+      lines.filter(l => /^(hi|hello|hey|your|good\s)/i.test(l)).length >= Math.ceil(lines.length * 0.6);
+
+    if (looksLikeVariationList) {
+      return shuffleArray(lines);
+    }
+  }
+
+  return [cleanRaw];
+}
+
+function personalizeContent(template, recipient) {
+  if (!template) return '';
+  let content = parseSpintax(template);
+
+  const displayName = recipient.name || recipient.firstName || 'there';
+  const displayFirstName = recipient.firstName || displayName;
+
+  content = content.replace(/{Name}/gi, displayName);
+  content = content.replace(/{FirstName}/gi, displayFirstName);
+  content = content.replace(/{First_Name}/gi, displayFirstName);
+  content = content.replace
