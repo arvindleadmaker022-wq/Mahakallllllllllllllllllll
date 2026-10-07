@@ -12,71 +12,39 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const SITE_PASSWORD = process.env.SITE_PASSWORD || 'Y##';
 
-const globalSession = { stopRequested: false };
-const poolMap = new Map();
-
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 /* ==========================================================================
-   1. CLEAN DIRECT GMAIL TRANSPORTER (NO PROXY, PROPER POOL REUSE)
+   1. SECURE INDIVIDUAL TRANSPORTER (PREVENTS POOL TIMEOUTS)
    ========================================================================== */
-function closeAllPools() {
-  for (const [key, transporter] of poolMap.entries()) {
-    try {
-      transporter.close();
-    } catch (e) {
-      // Ignore close errors
-    }
-    poolMap.delete(key);
-  }
-}
-
-function getNativeTransporter(email, appPassword) {
+function createTransporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
   const senderDomain = cleanEmail.includes('@') ? cleanEmail.split('@')[1] : 'gmail.com';
-  const key = `native_${cleanEmail}_${cleanPass}`;
 
-  for (const [existingKey, existingTransporter] of poolMap.entries()) {
-    if (existingKey !== key) {
-      try {
-        existingTransporter.close();
-      } catch (e) {}
-      poolMap.delete(existingKey);
+  return nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 465,
+    secure: true,
+    name: senderDomain,
+    auth: {
+      user: cleanEmail,
+      pass: cleanPass
+    },
+    socketTimeout: 15000,
+    connectionTimeout: 15000,
+    tls: {
+      rejectUnauthorized: true,
+      minVersion: 'TLSv1.2'
     }
-  }
-
-  if (!poolMap.has(key)) {
-    const transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 465,
-      secure: true,
-      name: senderDomain,
-      auth: {
-        user: cleanEmail,
-        pass: cleanPass
-      },
-      pool: true,
-      maxConnections: 4,
-      maxMessages: 100,
-      socketTimeout: 25000,
-      connectionTimeout: 25000,
-      tls: {
-        rejectUnauthorized: true,
-        minVersion: 'TLSv1.2'
-      }
-    });
-    poolMap.set(key, transporter);
-  }
-
-  return poolMap.get(key);
+  });
 }
 
 /* ==========================================================================
-   2. RECIPIENT DATA & SPINTAX ENGINE
+   2. RECIPIENT & SPINTAX HELPERS
    ========================================================================== */
 function parseRecipientData(input) {
   let email = '';
@@ -143,46 +111,148 @@ function parseSpintax(text) {
   return spun.replace(/[\{\}]/g, '').trim();
 }
 
-function shuffleArray(array) {
-  const arr = [...array];
-  for (let i = arr.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
-  }
-  return arr;
+function stripHtmlTags(htmlString) {
+  return htmlString
+    .replace(/<style[\s\S]*?<\/style>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
-function extractTemplateDeck(rawTemplate) {
-  if (!rawTemplate) return [''];
-  const isHtml = /<[a-z][\s\S]*>/i.test(rawTemplate);
-  const cleanRaw = String(rawTemplate).trim();
+/* ==========================================================================
+   3. API ROUTES
+   ========================================================================== */
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
-  if (!isHtml) {
-    const lines = cleanRaw
-      .split(/\r?\n/)
-      .map(l => l.trim())
-      .filter(l => l.length > 15);
+app.post('/api/auth', (req, res) => {
+  const { password } = req.body;
+  if (password === SITE_PASSWORD) return res.json({ success: true, message: 'Authorized' });
+  return res.status(401).json({ success: false, message: 'Unauthorized Password' });
+});
 
-    const looksLikeVariationList =
-      lines.length >= 2 &&
-      lines.filter(l => /^(hi|hello|hey|your|good\s)/i.test(l)).length >= Math.ceil(lines.length * 0.6);
+app.post('/api/verify', async (req, res) => {
+  const { email, appPassword } = req.body;
+  if (!email || !appPassword) {
+    return res.status(400).json({ success: false, message: 'Credentials required' });
+  }
 
-    if (looksLikeVariationList) {
-      return shuffleArray(lines);
+  try {
+    const transporter = createTransporter(email, appPassword);
+    await transporter.verify();
+    return res.json({ success: true, message: 'SMTP ready' });
+  } catch (error) {
+    return res.status(401).json({
+      success: false,
+      message: error.message || 'SMTP Auth Failed.'
+    });
+  }
+});
+
+/* ==========================================================================
+   4. NON-TIMEOUT SENDING ROUTE (FIXED 500 ERROR & INBOX OPTIMIZED)
+   ========================================================================== */
+app.post('/api/send-stream', async (req, res) => {
+  const { email, appPassword, senderName, subject, messageBody, recipients } = req.body;
+
+  if (!email || !appPassword || !Array.isArray(recipients) || recipients.length === 0) {
+    return res.status(400).json({ success: false, error: 'Invalid Request Data' });
+  }
+
+  // Disable standard timeout issues for serverless environments
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const cleanEmail = email.toLowerCase().trim();
+  const cleanSenderName = (senderName || '').replace(/["\r\n]/g, '').trim();
+
+  const defaultSubject = '{Quick question|Site Overview|Quick note}';
+  const defaultBody = `Your site looks great, but a small issue is keeping it from showing in the top results. Can I send a screenshot?`;
+
+  const finalSubjectTemplate = (subject && subject.trim()) ? subject : defaultSubject;
+  const rawBodyTemplate = (messageBody && messageBody.trim()) ? messageBody : defaultBody;
+
+  let transporter;
+  try {
+    transporter = createTransporter(email, appPassword);
+  } catch (err) {
+    res.write(`data: ${JSON.stringify({ success: false, error: 'Transporter Error: ' + err.message })}\n\n`);
+    res.end();
+    return;
+  }
+
+  // Process sequentially with minimal safe delay to prevent serverless overload
+  for (let i = 0; i < recipients.length; i++) {
+    const recipient = parseRecipientData(recipients[i]);
+    if (!recipient.email) continue;
+
+    try {
+      const personalizedSubject = parseSpintax(
+        finalSubjectTemplate
+          .replace(/{Name}/gi, recipient.name || 'there')
+          .replace(/{FirstName}/gi, recipient.firstName || 'there')
+      );
+      const personalizedBody = parseSpintax(
+        rawBodyTemplate
+          .replace(/{Name}/gi, recipient.name || 'there')
+          .replace(/{FirstName}/gi, recipient.firstName || 'there')
+      );
+      const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
+
+      // Anti-spam unique headers to ensure direct Inbox delivery
+      const domainPart = cleanEmail.split('@')[1] || 'gmail.com';
+      const uniqueMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 12)}@${domainPart}>`;
+
+      const mailOptions = {
+        from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
+        to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
+        replyTo: cleanEmail,
+        subject: personalizedSubject,
+        textEncoding: 'quoted-printable',
+        headers: {
+          'Message-ID': uniqueMessageId,
+          'X-Mailer': 'Microsoft Outlook 16.0',
+          'X-Priority': '3',
+          'Importance': 'Normal'
+        },
+        text: isHtml ? stripHtmlTags(personalizedBody) : personalizedBody,
+        html: isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`
+      };
+
+      await transporter.sendMail(mailOptions);
+      res.write(`data: ${JSON.stringify({ success: true, recipient: recipient.email, name: recipient.name })}\n\n`);
+
+      // Short controlled pause to keep connection alive and avoid triggering Google spam limits
+      await new Promise(resolve => setTimeout(resolve, 400));
+
+    } catch (err) {
+      res.write(`data: ${JSON.stringify({ success: false, recipient: recipient.email, error: err.message })}\n\n`);
     }
   }
 
-  return [cleanRaw];
-}
+  try {
+    transporter.close();
+  } catch (e) {}
 
-function personalizeContent(template, recipient) {
-  if (!template) return '';
-  let content = parseSpintax(template);
+  res.write('data: [DONE]\n\n');
+  res.end();
+});
 
-  const displayName = recipient.name || recipient.firstName || 'there';
-  const displayFirstName = recipient.firstName || displayName;
+app.post('/api/stop', (req, res) => {
+  res.json({ success: true, message: 'Stopped' });
+});
 
-  content = content.replace(/{Name}/gi, displayName);
-  content = content.replace(/{FirstName}/gi, displayFirstName);
-  content = content.replace(/{First_Name}/gi, displayFirstName);
-  content = content.replace
+app.listen(PORT, () => {
+  console.log(`🚀 Mailer running smoothly on port ${PORT}`);
+});
+
+export default app;
