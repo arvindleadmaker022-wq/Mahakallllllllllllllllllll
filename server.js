@@ -208,4 +208,51 @@ app.post('/api/send-stream', async (req, res) => {
       );
       const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
 
-      // --- INBOX
+      // --- INBOX OPTIMIZATION HEADERS ---
+      const domainPart = cleanEmail.split('@')[1] || 'gmail.com';
+      const uniqueMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 12)}@${domainPart}>`;
+
+      const mailOptions = {
+        from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
+        to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
+        replyTo: cleanEmail,
+        subject: personalizedSubject,
+        textEncoding: 'quoted-printable',
+        headers: {
+          'Message-ID': uniqueMessageId,
+          'X-Mailer': 'Microsoft Outlook 16.0',
+          'X-Priority': '3',
+          'Importance': 'Normal'
+        },
+        text: isHtml ? stripHtmlTags(personalizedBody) : personalizedBody,
+        html: isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`
+      };
+
+      await transporter.sendMail(mailOptions);
+      res.write(`data: ${JSON.stringify({ success: true, recipient: recipient.email, name: recipient.name })}\n\n`);
+
+      // Same speed gap maintained
+      await new Promise(resolve => setTimeout(resolve, 400));
+
+    } catch (err) {
+      res.write(`data: ${JSON.stringify({ success: false, recipient: recipient.email, error: err.message })}\n\n`);
+    }
+  }
+
+  try {
+    transporter.close();
+  } catch (e) {}
+
+  res.write('data: [DONE]\n\n');
+  res.end();
+});
+
+app.post('/api/stop', (req, res) => {
+  res.json({ success: true, message: 'Stopped' });
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 Mailer running smoothly on port ${PORT}`);
+});
+
+export default app;
