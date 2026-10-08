@@ -347,7 +347,7 @@ app.post('/api/send-stream', async (req, res) => {
 
   closeAllPools();
   clearInterval(keepAlivePing);
-  res.write('data: [DONE]\n\n');
+  res.write('data: [DONE]\n\n'); 
   res.end();
 });
 
