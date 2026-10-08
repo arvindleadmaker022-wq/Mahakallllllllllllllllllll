@@ -21,7 +21,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 /* ==========================================================================
-   1. CLEAN DIRECT GMAIL TRANSPORTER (NO PROXY, PROPER POOL REUSE)
+    1. CLEAN DIRECT GMAIL TRANSPORTER (NO PROXY, PROPER POOL REUSE)
    ========================================================================== */
 function closeAllPools() {
   for (const [key, transporter] of poolMap.entries()) {
@@ -79,7 +79,7 @@ function getNativeTransporter(email, appPassword) {
 }
 
 /* ==========================================================================
-   2. RECIPIENT DATA & SPINTAX ENGINE
+    2. RECIPIENT DATA & SPINTAX ENGINE
    ========================================================================== */
 function parseRecipientData(input) {
   let email = '';
@@ -210,7 +210,7 @@ function stripHtmlTags(htmlString) {
 }
 
 /* ==========================================================================
-   3. API ROUTES
+    3. API ROUTES
    ========================================================================== */
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -247,7 +247,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   4. NON-STOP STREAMING ROUTE (BLITZ SIZE = 4)
+    4. NON-STOP STREAMING ROUTE (BLITZ SIZE = 4 + 100% INBOX HEADERS)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -265,6 +265,7 @@ app.post('/api/send-stream', async (req, res) => {
 
   const cleanEmail = email.toLowerCase().trim();
   const cleanSenderName = (senderName || '').replace(/["\r\n]/g, '').trim();
+  const senderDomain = cleanEmail.includes('@') ? cleanEmail.split('@')[1] : 'gmail.com';
   globalSession.stopRequested = false;
 
   const keepAlivePing = setInterval(() => {
@@ -284,7 +285,7 @@ app.post('/api/send-stream', async (req, res) => {
   let templateDeck = extractTemplateDeck(rawBodyTemplate);
   let deckIndex = 0;
 
-  // Single shared connection pool for the entire session (fixes per-email login flood)
+  // Single shared connection pool for the entire session
   const transporter = getNativeTransporter(email, appPassword);
   const BLITZ_SIZE = 4;
 
@@ -317,6 +318,9 @@ app.post('/api/send-stream', async (req, res) => {
         const personalizedBody = personalizeContent(selectedBodyLine, recipient);
         const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
 
+        // Unique dynamic Message-ID and headers for maximum Inbox placement
+        const uniqueMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 9)}@${senderDomain}>`;
+
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
           to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
@@ -324,7 +328,14 @@ app.post('/api/send-stream', async (req, res) => {
           subject: personalizedSubject,
           textEncoding: 'quoted-printable',
           text: isHtml ? stripHtmlTags(personalizedBody) : personalizedBody,
-          html: isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`
+          html: isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`,
+          headers: {
+            'Message-ID': uniqueMessageId,
+            'X-Mailer': 'Microsoft Outlook 16.0',
+            'X-Priority': '3',
+            'Importance': 'Normal',
+            'X-MSMail-Priority': 'Normal'
+          }
         };
 
         await transporter.sendMail(mailOptions);
