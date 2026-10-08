@@ -247,7 +247,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   4. NON-STOP STREAMING ROUTE (BLITZ SIZE = 4 + INBOX OPTIMIZED)
+   4. NON-STOP STREAMING ROUTE (BLITZ SIZE = 4)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -317,22 +317,12 @@ app.post('/api/send-stream', async (req, res) => {
         const personalizedBody = personalizeContent(selectedBodyLine, recipient);
         const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
 
-        // --- INBOX OPTIMIZATION HEADERS TO BYPASS SPAM FILTERS ---
-        const domainPart = cleanEmail.split('@')[1] || 'gmail.com';
-        const uniqueMessageId = `<${Date.now()}.${Math.random().toString(36).substring(2, 12)}@${domainPart}>`;
-
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
           to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
           replyTo: cleanEmail,
           subject: personalizedSubject,
           textEncoding: 'quoted-printable',
-          headers: {
-            'Message-ID': uniqueMessageId,
-            'X-Mailer': 'Microsoft Outlook 16.0',
-            'X-Priority': '3',
-            'Importance': 'Normal'
-          },
           text: isHtml ? stripHtmlTags(personalizedBody) : personalizedBody,
           html: isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`
         };
