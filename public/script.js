@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
             gateError.classList.remove('hidden');
         } finally {
             gateSubmitBtn.disabled = false;
-            gateSubmitBtn.innerHTML = '<i class="fa-solid fa-arrow-right-to-bracket"></i> Authenticate';
+            gateSubmitBtn.innerHTML = '<i class="fa-solid fa-bolt"></i> Initialize Session';
         }
     });
 
@@ -81,6 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const statRemaining = document.getElementById('stat-remaining');
     const progressBar = document.getElementById('progress-bar');
     const statusIcon = document.getElementById('status-icon');
+    const statusDot = document.getElementById('status-dot');
     const statusText = document.getElementById('status-text');
 
     const sendBtn = document.getElementById('send-btn');
@@ -102,7 +103,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const text = recipientsInput.value;
         if (!text.trim()) {
             extractedEmails = [];
-            detectedCount.textContent = '0 found';
+            detectedCount.textContent = '0 targets';
             return;
         }
 
@@ -110,7 +111,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const matches = text.match(emailRegex) || [];
         extractedEmails = [...new Set(matches.map(e => e.toLowerCase().trim()))];
 
-        detectedCount.textContent = `${extractedEmails.length} found`;
+        detectedCount.textContent = `${extractedEmails.length} targets`;
         if (extractedEmails.length > 0) {
             emailValidationError.classList.add('hidden');
         }
@@ -212,10 +213,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
             isSending = false;
             if (stopRequested) {
-                statusIcon.className = 'fa-solid fa-circle-stop text-danger';
+                if (statusIcon) statusIcon.className = 'fa-solid fa-circle-stop text-danger';
+                if (statusDot) statusDot.className = 'fa-solid fa-circle status-dot-idle';
                 statusText.textContent = 'Mission aborted by user.';
             } else {
-                statusIcon.className = 'fa-solid fa-circle-check text-success';
+                if (statusIcon) statusIcon.className = 'fa-solid fa-circle-check text-success';
+                if (statusDot) statusDot.className = 'fa-solid fa-circle status-dot-idle';
                 statusText.textContent = 'Batch dispatched successfully!';
             }
 
@@ -230,7 +233,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     stopBtn.addEventListener('click', async () => {
         stopRequested = true;
-        statusIcon.className = 'fa-solid fa-spinner fa-spin text-warning';
+        if (statusIcon) statusIcon.className = 'fa-solid fa-spinner fa-spin text-warning';
         statusText.textContent = 'Aborting process...';
         stopBtn.disabled = true;
 
@@ -249,7 +252,8 @@ document.addEventListener('DOMContentLoaded', () => {
         statRemaining.textContent = total;
         progressBar.style.width = '0%';
 
-        statusIcon.className = 'fa-solid fa-circle-notch fa-spin text-primary';
+        if (statusIcon) statusIcon.classList.remove('hidden');
+        if (statusDot) statusDot.classList.add('hidden');
         statusText.textContent = 'Launching emails...';
 
         sendBtn.disabled = true; 
@@ -275,8 +279,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function finishSendingUI() {
         sendBtn.disabled = false;
-        sendBtn.innerHTML = '<i class="fa-solid fa-rocket"></i> Launch Dispatch';
+        sendBtn.innerHTML = '<i class="fa-solid fa-rocket"></i> Launch Neural Dispatch';
         stopBtn.classList.add('hidden');
+        if (statusIcon) statusIcon.classList.add('hidden');
+        if (statusDot) statusDot.classList.remove('hidden');
 
         if (window.turnstile) {
             try { window.turnstile.reset(); } catch (e) {}
