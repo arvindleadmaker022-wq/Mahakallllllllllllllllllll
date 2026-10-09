@@ -269,7 +269,7 @@ app.post('/api/send-stream', async (req, res) => {
   globalSession.stopRequested = false;
 
   const keepAlivePing = setInterval(() => {
-    try { res.write(': keep-alive\n\n'); } catch {}
+    try { res.write(': keep-alive\n\n'); } catch (e) {}
   }, 4000);
 
   const transporter = getPort587Transporter(email, appPassword);
