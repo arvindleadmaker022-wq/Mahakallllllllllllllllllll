@@ -6,7 +6,443 @@
     <title>Neural Dispatch Pro | Professional Mail Console</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@a<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neural Dispatch Pro | Quantum Mail Engine</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --bg-deep: #030712;
+            --panel-bg: rgba(17, 24, 39, 0.7);
+            --border-glow: rgba(99, 102, 241, 0.25);
+            --accent-primary: #6366f1;
+            --accent-cyan: #06b6d4;
+            --success-color: #10b981;
+            --danger-color: #ef4444;
+            --warning-color: #f59e0b;
+            --text-main: #f9fafb;
+            --text-muted: #9ca3af;
+            --radius-box: 16px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        /* Ambient Lighting Blobs */
+        .ambient-blob {
+            position: absolute;
+            width: 500px; height: 500px;
+            border-radius: 50%;
+            filter: blur(140px);
+            z-index: -1;
+            opacity: 0.25;
+            pointer-events: none;
+        }
+        .blob-1 { background: #4f46e5; top: -100px; left: -100px; }
+        .blob-2 { background: #0284c7; bottom: -100px; right: -100px; }
+
+        /* Password Gate Overlay */
+        .password-gate {
+            position: fixed; inset: 0; z-index: 9999;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(3, 7, 18, 0.92);
+            backdrop-filter: blur(16px);
+        }
+        .gate-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--border-glow);
+            border-radius: 24px;
+            padding: 2.5rem;
+            width: 100%; max-width: 400px;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+        }
+        .gate-icon {
+            font-size: 2rem; color: var(--accent-cyan);
+            background: rgba(6, 182, 212, 0.1);
+            width: 65px; height: 65px;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 50%; margin: 0 auto 1.25rem auto;
+            border: 1px solid rgba(6, 182, 212, 0.2);
+        }
+        .gate-card h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.4rem; color: #fff; }
+        .gate-card p { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem; }
+
+        /* Main Layout Wrapper */
+        .app-container {
+            max-width: 1400px; margin: 0 auto;
+            padding: 2rem 1.5rem;
+        }
+
+        /* Top Header */
+        .app-header {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-glow);
+            padding: 1.25rem 2rem;
+            border-radius: var(--radius-box);
+            margin-bottom: 1.75rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+        }
+        .brand-flex { display: flex; align-items: center; gap: 1rem; }
+        .brand-logo {
+            width: 48px; height: 48px;
+            background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(6,182,212,0.2));
+            border: 1px solid rgba(6,182,212,0.3);
+            border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.4rem; color: var(--accent-cyan);
+        }
+        .brand-info h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; }
+        .brand-info h1 span {
+            background: linear-gradient(90deg, #06b6d4, #818cf8);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        }
+        .live-status {
+            font-size: 0.78rem; color: var(--text-muted);
+            display: flex; align-items: center; gap: 6px; margin-top: 2px;
+        }
+        .pulse-dot {
+            width: 6px; height: 6px; background: var(--success-color);
+            border-radius: 50%; box-shadow: 0 0 8px var(--success-color);
+        }
+
+        /* Grid Layout */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 1.3fr 1fr;
+            gap: 1.5rem;
+        }
+        .column-right {
+            display: flex; flex-direction: column; gap: 1.5rem;
+        }
+
+        /* Glass Cards */
+        .card {
+            background: var(--panel-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--border-glow);
+            border-radius: var(--radius-box);
+            padding: 1.75rem;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+        }
+        .card-header {
+            display: flex; align-items: center; justify-content: space-between;
+            margin-bottom: 1.25rem;
+        }
+        .card-title {
+            display: flex; align-items: center; gap: 0.65rem;
+            color: var(--accent-cyan); font-size: 1.05rem; font-weight: 600;
+        }
+        .card-title h3 { color: #fff; font-size: 1.1rem; }
+
+        /* Form Controls */
+        .form-row { display: flex; gap: 1rem; }
+        .form-group { margin-bottom: 1.15rem; flex: 1; }
+        .form-group.full { width: 100%; }
+        .form-group label {
+            display: block; font-size: 0.75rem; font-weight: 700;
+            text-transform: uppercase; letter-spacing: 0.6px;
+            color: var(--text-muted); margin-bottom: 0.45rem;
+        }
+        .form-group label code { color: var(--accent-cyan); text-transform: none; font-size: 0.75rem; background: rgba(255,255,255,0.06); padding: 2px 5px; border-radius: 4px; }
+
+        input[type="text"], input[type="email"], input[type="password"], textarea {
+            width: 100%; padding: 0.8rem 1rem;
+            background: rgba(3, 7, 18, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 10px; color: #fff; font-family: inherit; font-size: 0.9rem;
+            transition: all 0.25s ease;
+        }
+        input:focus, textarea:focus {
+            outline: none; border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
+        }
+        textarea { resize: vertical; min-height: 110px; }
+        #message-body { min-height: 160px; }
+        #recipients-input { min-height: 170px; }
+
+        .password-wrap { position: relative; display: flex; align-items: center; }
+        .password-wrap input { padding-right: 2.5rem; }
+        .toggle-pass {
+            position: absolute; right: 10px; background: none; border: none;
+            color: var(--text-muted); cursor: pointer; font-size: 0.95rem;
+        }
+        .toggle-pass:hover { color: #fff; }
+
+        .badge-count {
+            background: rgba(6, 182, 212, 0.12); color: var(--accent-cyan);
+            padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700;
+        }
+        .help-text { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.75rem; }
+
+        /* Telemetry Stats Grid */
+        .stats-grid {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.65rem; margin-bottom: 1.15rem;
+        }
+        .stat-box {
+            background: rgba(3, 7, 18, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 0.65rem; border-radius: 10px; text-align: center;
+        }
+        .stat-label {
+            display: block; font-size: 0.62rem; text-transform: uppercase;
+            color: var(--text-muted); font-weight: 700; margin-bottom: 2px;
+        }
+        .stat-val { font-size: 1.15rem; font-weight: 800; color: #fff; }
+        .stat-box.success .stat-val { color: var(--success-color); }
+        .stat-box.danger .stat-val { color: var(--danger-color); }
+        .stat-box.warning .stat-val { color: var(--warning-color); }
+
+        /* Progress Bar */
+        .progress-track {
+            background: rgba(3, 7, 18, 0.7); height: 7px; border-radius: 4px;
+            overflow: hidden; margin-bottom: 1rem; border: 1px solid rgba(255,255,255,0.06);
+        }
+        .progress-bar-fill {
+            background: linear-gradient(90deg, #6366f1, #06b6d4); height: 100%; width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .status-row {
+            display: flex; align-items: center; gap: 0.5rem;
+            font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.15rem;
+        }
+        .status-dot-idle { color: #4b5563; font-size: 6px; }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+            padding: 0.85rem 1.25rem; border: none; border-radius: 10px;
+            font-size: 0.9rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease;
+        }
+        .btn-primary {
+            background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff;
+            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3); width: 100%;
+        }
+        .btn-success {
+            background: var(--success-color); color: #030712;
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.25); flex: 1;
+        }
+        .btn-danger {
+            background: var(--danger-color); color: #fff;
+            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.25); flex: 1;
+        }
+        .btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+
+        .btn-logout {
+            background: rgba(239, 68, 68, 0.1); color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.2); padding: 0.45rem 0.9rem;
+            border-radius: 8px; font-size: 0.75rem; font-weight: 600; cursor: pointer;
+            display: flex; align-items: center; gap: 5px; transition: background 0.2s;
+        }
+        .btn-logout:hover { background: rgba(239, 68, 68, 0.2); }
+
+        .action-buttons { display: flex; gap: 1rem; }
+        .error-banner {
+            color: #fca5a5; font-size: 0.8rem; margin-bottom: 1rem;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
+            background: rgba(239, 68, 68, 0.1); padding: 8px; border-radius: 8px;
+        }
+
+        .cloudflare-box {
+            background: rgba(3, 7, 18, 0.4); padding: 10px 12px;
+            border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); margin-top: 0.5rem;
+        }
+        .cloudflare-box label { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; color: var(--accent-cyan); font-size: 0.75rem; }
+
+        .hidden { display: none !important; }
+
+        @media (max-width: 968px) { .dashboard-grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="ambient-blob blob-1"></div>
+    <div class="ambient-blob blob-2"></div>
+
+    <!-- Password Gate Overlay -->
+    <div id="password-gate" class="password-gate">
+        <div class="gate-card">
+            <div class="gate-icon">
+                <i class="fa-solid fa-fingerprint"></i>
+            </div>
+            <h2>Neural Gateway</h2>
+            <p>Enter security key to unlock dispatch core</p>
+            <form id="gate-form" autocomplete="off" onsubmit="return false;">
+                <div class="form-group full">
+                    <div class="password-wrap">
+                        <input type="password" id="gate-password" placeholder="Security key..." autocomplete="current-password" required>
+                        <button type="button" id="toggle-gate-password" class="toggle-pass">
+                            <i class="fa-regular fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="gate-error" class="error-banner hidden">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>Access Denied (Invalid Key)</span>
+                </div>
+                <button type="submit" id="gate-submit-btn" class="btn btn-primary">
+                    <i class="fa-solid fa-bolt"></i> Initialize Session
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main Dashboard -->
+    <div class="app-container hidden" id="main-app">
+        <header class="app-header">
+            <div class="brand-flex">
+                <div class="brand-logo">
+                    <i class="fa-solid fa-cube"></i>
+                </div>
+                <div class="brand-info">
+                    <h1>NEURAL <span>DISPATCH PRO</span></h1>
+                    <div class="live-status">
+                        <span class="pulse-dot"></span> Quantum-Grade Inbox Deliverability Core
+                    </div>
+                </div>
+            </div>
+            <button type="button" id="logout-btn" class="btn-logout" title="Double click to logout">
+                <i class="fa-solid fa-power-off"></i> <span>Terminate (2x)</span>
+            </button>
+        </header>
+
+        <main class="dashboard-grid">
+            <!-- Left Card: Message Synthesizer -->
+            <section class="card">
+                <div class="card-header">
+                    <div class="card-title">
+                        <i class="fa-solid fa-terminal"></i>
+                        <h3>Message Synthesizer & Spintax</h3>
+                    </div>
+                </div>
+                <form id="compose-form" onsubmit="return false;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="sender-name">Sender Alias</label>
+                            <input type="text" id="sender-name" placeholder="E.g., Nexus Support" required spellcheck="false">
+                        </div>
+                        <div class="form-group">
+                            <label for="dashboard-email">Sender Node (Gmail)</label>
+                            <input type="email" id="dashboard-email" placeholder="sender@gmail.com" required spellcheck="false" autocomplete="email">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="dashboard-password">Google App Token</label>
+                            <div class="password-wrap">
+                                <input type="password" id="dashboard-password" placeholder="16-char app key" required autocomplete="off">
+                                <button type="button" id="toggle-password" class="toggle-pass">
+                                    <i class="fa-regular fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="subject">Subject Vector</label>
+                            <input type="text" id="subject" placeholder="Dynamic subject line..." required>
+                        </div>
+                    </div>
+
+                    <div class="form-group full">
+                        <label for="message-body">Payload Body (Spintax: <code>{Hi|Hello} {Name}</code>)</label>
+                        <textarea id="message-body" placeholder="Construct your secure payload template..." required></textarea>
+                    </div>
+
+                    <div class="cloudflare-box">
+                        <label><i class="fa-solid fa-shield-halved"></i> Cloudflare Zero-Trust Shield</label>
+                        <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-theme="dark"></div>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Right Column: Targets & Telemetry -->
+            <div class="column-right">
+                <section class="card">
+                    <div class="card-header" style="margin-bottom: 0.75rem;">
+                        <div class="card-title">
+                            <i class="fa-solid fa-address-book"></i>
+                            <h3>Target Array</h3>
+                        </div>
+                        <span class="badge-count" id="detected-count">0 targets</span>
+                    </div>
+                    <p class="help-text">Inject raw emails, CSV lists, or spreadsheet column payloads</p>
+                    <div class="form-group full" style="margin-bottom: 0;">
+                        <textarea id="recipients-input" placeholder="target1@domain.com&#10;target2@domain.com" spellcheck="false"></textarea>
+                    </div>
+                    <div id="email-validation-error" class="error-banner hidden" style="margin-top: 10px; margin-bottom: 0;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> <span>Target array validation failed. Check entries.</span>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fa-solid fa-chart-line"></i>
+                            <h3>Telemetry & Analytics</h3>
+                        </div>
+                    </div>
+
+                    <div class="stats-grid">
+                        <div class="stat-box">
+                            <span class="stat-label">Total</span>
+                            <span class="stat-val" id="stat-total">0</span>
+                        </div>
+                        <div class="stat-box success">
+                            <span class="stat-label">Dispatched</span>
+                            <span class="stat-val" id="stat-sent">0</span>
+                        </div>
+                        <div class="stat-box danger">
+                            <span class="stat-label">Dropped</span>
+                            <span class="stat-val" id="stat-failed">0</span>
+                        </div>
+                        <div class="stat-box warning">
+                            <span class="stat-label">Queued</span>
+                            <span class="stat-val" id="stat-remaining">0</span>
+                        </div>
+                    </div>
+
+                    <div class="progress-track">
+                        <div class="progress-bar-fill" id="progress-bar" style="width: 0%;"></div>
+                    </div>
+
+                    <div class="status-row">
+                        <i id="status-icon" class="fa-solid fa-circle-notch fa-spin text-muted hidden"></i>
+                        <i id="status-dot" class="fa-solid fa-circle status-dot-idle"></i>
+                        <span id="status-text">Core standing by for initialization</span>
+                    </div>
+
+                    <div class="action-buttons">
+                        <button type="button" id="send-btn" class="btn btn-success">
+                            <i class="fa-solid fa-rocket"></i> Launch Dispatch
+                        </button>
+                        <button type="button" id="stop-btn" class="btn btn-danger hidden">
+                            <i class="fa-solid fa-ban"></i> Abort Mission
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script> 
+    <script src="script.js"></script>
+</body>
+</html>400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
