@@ -3,177 +3,178 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Launcher PRO | Neural Dispatch Console</title>
+    <title>AetherMail | Next-Gen Quantum Dispatch</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="style.css">
 </head>
-<body class="cyber-theme">
-    <!-- Ambient Glow Background Elements -->
-    <div class="ambient-glow glow-1"></div>
-    <div class="ambient-glow glow-2"></div>
+<body>
+    <!-- Dynamic Mesh Background Orbs -->
+    <div class="mesh-orb orb-1"></div>
+    <div class="mesh-orb orb-2"></div>
+    <div class="mesh-orb orb-3"></div>
 
     <!-- Password Gate Overlay -->
-    <div id="password-gate" class="password-gate">
-        <div class="gate-card fade-in">
-            <div class="gate-icon-pulse">
-                <i class="fa-solid fa-fingerprint"></i>
+    <div id="password-gate" class="gate-overlay">
+        <div class="gate-glass-card">
+            <div class="gate-emblem">
+                <i class="fa-solid fa-shield-cat"></i>
             </div>
-            <h2>Neural Gateway</h2>
-            <p>Authenticate security token to access dispatch core</p>
+            <h2>Aether Gateway</h2>
+            <p>Enter security clearance token to initialize core</p>
             <form id="gate-form" autocomplete="off" onsubmit="return false;">
-                <div class="form-group">
-                    <div class="password-wrapper">
-                        <input type="password" id="gate-password" placeholder="Enter security key..." autocomplete="current-password" required>
-                        <button type="button" id="toggle-gate-password" class="icon-button" aria-label="Toggle password visibility">
+                <div class="input-group">
+                    <div class="pass-box">
+                        <input type="password" id="gate-password" placeholder="Security Key..." autocomplete="current-password" required>
+                        <button type="button" id="toggle-gate-password" class="reveal-btn">
                             <i class="fa-regular fa-eye"></i>
                         </button>
                     </div>
                 </div>
-                <div id="gate-error" class="gate-error hidden">
+                <div id="gate-error" class="error-banner hidden">
                     <i class="fa-solid fa-triangle-exclamation"></i>
-                    <span>Access Denied (Invalid Key)</span>
+                    <span>Access Denied: Invalid Security Key</span>
                 </div>
-                <button type="submit" id="gate-submit-btn" class="btn btn-primary btn-block">
-                    <i class="fa-solid fa-bolt"></i> Initialize Session
+                <button type="submit" id="gate-submit-btn" class="quantum-btn btn-full">
+                    <span>Initialize Core</span> <i class="fa-solid fa-arrow-right"></i>
                 </button>
             </form>
         </div>
     </div>
 
     <!-- Main Dashboard Application -->
-    <div class="app-container hidden" id="main-app">
-        <header class="app-header">
-            <div class="brand">
-                <div class="brand-icon-wrapper">
-                    <i class="fa-solid fa-cube brand-icon"></i>
+    <div class="app-wrapper hidden" id="main-app">
+        <header class="dashboard-header">
+            <div class="logo-area">
+                <div class="logo-emblem">
+                    <i class="fa-solid fa-atom"></i>
                 </div>
                 <div>
-                    <h1>NEURAL <span class="gradient-text">DISPATCH PRO</span></h1>
-                    <p><span class="live-pulse"></span> Quantum-Grade High-Deliverability Console</p>
+                    <h1>AETHER <span class="highlight">DISPATCH</span></h1>
+                    <div class="status-badge-live">
+                        <span class="pulsing-dot"></span> Quantum-Grade Inbox Deliverability Engine
+                    </div>
                 </div>
             </div>
-            <button type="button" id="logout-btn" class="btn-logout" title="Double click to logout">
-                <i class="fa-solid fa-power-off"></i> <span>Disconnect (2x)</span>
+            <button type="button" id="logout-btn" class="disconnect-btn" title="Double click to disconnect">
+                <i class="fa-solid fa-power-off"></i> <span>Terminate Session (2x)</span>
             </button>
         </header>
 
-        <section id="dashboard-section">
-            <div class="dashboard-grid">
-                <!-- Composer Card -->
-                <div class="card composer-card fade-in">
-                    <div class="card-title">
-                        <i class="fa-solid fa-terminal"></i>
-                        <h3>Message Synthesizer & Spintax</h3>
-                    </div>
-                    <form id="compose-form" onsubmit="return false;">
-                        <div class="form-row">
-                            <div class="form-group half">
-                                <label for="sender-name">Sender Alias</label>
-                                <input type="text" id="sender-name" placeholder="E.g., Nexus Support" required spellcheck="false">
-                            </div>
-                            <div class="form-group half">
-                                <label for="dashboard-email">Sender Node (Gmail)</label>
-                                <input type="email" id="dashboard-email" placeholder="sender@gmail.com" required spellcheck="false" autocomplete="email">
-                            </div>
-                        </div>
-
-                        <div class="form-row">
-                            <div class="form-group half">
-                                <label for="dashboard-password">Google App Token</label>
-                                <div class="password-wrapper">
-                                    <input type="password" id="dashboard-password" placeholder="16-char app key" required autocomplete="off">
-                                    <button type="button" id="toggle-password" class="icon-button" aria-label="Toggle App Password">
-                                        <i class="fa-regular fa-eye"></i>
-                                    </button>
-                                </div>
-                            </div>
-                            <div class="form-group half">
-                                <label for="subject">Subject Vector</label>
-                                <input type="text" id="subject" placeholder="Dynamic subject line..." required>
-                            </div>
-                        </div>
-
-                        <div class="form-group flex-grow">
-                            <label for="message-body">Payload Body (Spintax Supported: <code>{Hi|Hello} {Name}</code>)</label>
-                            <textarea id="message-body" placeholder="Construct your secure payload template..." required></textarea>
-                        </div>
-                        
-                        <div class="form-group security-box">
-                            <label><i class="fa-solid fa-shield-halved"></i> Cloudflare Zero-Trust Shield</label>
-                            <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-theme="dark"></div>
-                        </div>
-                    </form>
+        <main class="workspace-grid">
+            <!-- Left Panel: Synthesizer -->
+            <section class="glass-panel synthesizer-panel">
+                <div class="panel-header">
+                    <i class="fa-solid fa-code-merge"></i>
+                    <h2>Payload Synthesizer & Spintax Engine</h2>
                 </div>
-
-                <!-- Recipients & Controls -->
-                <div class="right-column">
-                    <div class="card recipients-card fade-in">
-                        <div class="card-header-flex">
-                            <div class="card-title" style="margin-bottom:0;">
-                                <i class="fa-solid fa-address-book"></i>
-                                <h3>Target Array</h3>
-                            </div>
-                            <span class="badge" id="detected-count">0 targets</span>
+                <form id="compose-form" onsubmit="return false;">
+                    <div class="row-group">
+                        <div class="field-wrap">
+                            <label for="sender-name">Sender Alias</label>
+                            <input type="text" id="sender-name" placeholder="E.g. Nova Media" required spellcheck="false">
                         </div>
-                        <p class="help-subtext">Inject raw emails, CSV lists, or spreadsheet column payloads</p>
-                        <div class="form-group flex-grow" style="margin-bottom: 0;">
-                            <textarea id="recipients-input" placeholder="target1@domain.com&#10;target2@domain.com" spellcheck="false"></textarea>
-                        </div>
-                        <div id="email-validation-error" class="error-message hidden">
-                            <i class="fa-solid fa-triangle-exclamation"></i> <span>Target array validation failed. Check entries.</span>
+                        <div class="field-wrap">
+                            <label for="dashboard-email">Sender Node (Gmail)</label>
+                            <input type="email" id="dashboard-email" placeholder="name@gmail.com" required spellcheck="false" autocomplete="email">
                         </div>
                     </div>
 
-                    <div class="card progress-card fade-in">
-                        <div class="card-title">
-                            <i class="fa-solid fa-chart-line"></i>
-                            <h3>Telemetry & Analytics</h3>
-                        </div>
-
-                        <div class="stats-grid">
-                            <div class="stat-box neutral">
-                                <span class="stat-label">Total</span>
-                                <span class="stat-value" id="stat-total">0</span>
-                            </div>
-                            <div class="stat-box success">
-                                <span class="stat-label">Dispatched</span>
-                                <span class="stat-value" id="stat-sent">0</span>
-                            </div>
-                            <div class="stat-box danger">
-                                <span class="stat-label">Dropped</span>
-                                <span class="stat-value" id="stat-failed">0</span>
-                            </div>
-                            <div class="stat-box warning">
-                                <span class="stat-label">Queued</span>
-                                <span class="stat-value" id="stat-remaining">0</span>
+                    <div class="row-group">
+                        <div class="field-wrap">
+                            <label for="dashboard-password">16-Char App Token</label>
+                            <div class="pass-box">
+                                <input type="password" id="dashboard-password" placeholder="xxxx xxxx xxxx xxxx" required autocomplete="off">
+                                <button type="button" id="toggle-password" class="reveal-btn">
+                                    <i class="fa-regular fa-eye"></i>
+                                </button>
                             </div>
                         </div>
-
-                        <div class="progress-bar-container">
-                            <div class="progress-bar" id="progress-bar" style="width: 0%;"></div>
-                        </div>
-
-                        <div class="status-indicator">
-                            <i id="status-icon" class="fa-solid fa-circle-notch fa-spin text-muted hidden"></i>
-                            <i id="status-dot" class="fa-solid fa-circle status-dot-idle"></i>
-                            <span id="status-text">Core standing by for initialization</span>
-                        </div>
-
-                        <div class="control-buttons">
-                            <button type="button" id="send-btn" class="btn btn-success btn-lg flex-1">
-                                <i class="fa-solid fa-rocket"></i> Launch Neural Dispatch
-                            </button>
-                            <button type="button" id="stop-btn" class="btn btn-danger btn-lg flex-1 hidden">
-                                <i class="fa-solid fa-ban"></i> Emergency Abort
-                            </button>
+                        <div class="field-wrap">
+                            <label for="subject">Subject Vector</label>
+                            <input type="text" id="subject" placeholder="{Quick question|Checking in|Hello}" required>
                         </div>
                     </div>
-                </div>
+
+                    <div class="field-wrap grow-flex">
+                        <label for="message-body">Message Payload (Spintax: <code>{Hi|Hello} {FirstName}</code>)</label>
+                        <textarea id="message-body" placeholder="Construct markdown or HTML template stream..." required></textarea>
+                    </div>
+
+                    <div class="cloudflare-wrap">
+                        <label><i class="fa-solid fa-shield-halved"></i> Zero-Trust Shield Protection</label>
+                        <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-theme="dark"></div>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Right Panel: Targets & Telemetry -->
+            <div class="sidebar-column">
+                <section class="glass-panel target-panel">
+                    <div class="panel-header space-between">
+                        <div class="title-flex">
+                            <i class="fa-solid fa-bullseye"></i>
+                            <h2>Target Array Matrix</h2>
+                        </div>
+                        <span class="counter-tag" id="detected-count">0 targets</span>
+                    </div>
+                    <p class="sub-hint">Inject raw emails, comma-separated lists, or lists</p>
+                    <div class="field-wrap grow-flex" style="margin-bottom:0;">
+                        <textarea id="recipients-input" placeholder="target1@domain.com&#10;target2@domain.com" spellcheck="false"></textarea>
+                    </div>
+                    <div id="email-validation-error" class="error-banner hidden" style="margin-top: 10px; margin-bottom: 0;">
+                        <i class="fa-solid fa-triangle-exclamation"></i> <span>No valid target vectors detected.</span>
+                    </div>
+                </section>
+
+                <section class="glass-panel analytics-panel">
+                    <div class="panel-header">
+                        <i class="fa-solid fa-chart-pie"></i>
+                        <h2>Telemetry Analytics</h2>
+                    </div>
+
+                    <div class="metrics-grid">
+                        <div class="metric-card">
+                            <span class="m-label">Total</span>
+                            <span class="m-value" id="stat-total">0</span>
+                        </div>
+                        <div class="metric-card success">
+                            <span class="m-label">Dispatched</span>
+                            <span class="m-value" id="stat-sent">0</span>
+                        </div>
+                        <div class="metric-card danger">
+                            <span class="m-label">Dropped</span>
+                            <span class="m-value" id="stat-failed">0</span>
+                        </div>
+                        <div class="metric-card warning">
+                            <span class="m-label">Queued</span>
+                            <span class="m-value" id="stat-remaining">0</span>
+                        </div>
+                    </div>
+
+                    <div class="progress-track">
+                        <div class="progress-fill" id="progress-bar" style="width: 0%;"></div>
+                    </div>
+
+                    <div class="status-bar-info">
+                        <i id="status-icon" class="fa-solid fa-circle-notch fa-spin text-muted hidden"></i>
+                        <i id="status-dot" class="fa-solid fa-circle status-dot-idle"></i>
+                        <span id="status-text">Core standing by for initialization</span>
+                    </div>
+
+                    <div class="action-grid">
+                        <button type="button" id="send-btn" class="quantum-btn btn-success flex-1">
+                            <i class="fa-solid fa-rocket"></i> <span>Launch Dispatch</span>
+                        </button>
+                        <button type="button" id="stop-btn" class="quantum-btn btn-danger flex-1 hidden">
+                            <i class="fa-solid fa-ban"></i> <span>Emergency Abort</span>
+                        </button>
+                    </div>
+                </section>
             </div>
-        </section>
+        </main>
     </div>
 
     <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script> 
