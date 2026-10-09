@@ -3,277 +3,235 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Neural Dispatch Pro | Quantum Mail Engine</title>
+    <title>Neural Dispatch Pro | Professional Mail Console</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --bg-deep: #030712;
-            --panel-bg: rgba(17, 24, 39, 0.7);
-            --border-glow: rgba(99, 102, 241, 0.25);
-            --accent-primary: #6366f1;
-            --accent-cyan: #06b6d4;
-            --success-color: #10b981;
-            --danger-color: #ef4444;
-            --warning-color: #f59e0b;
-            --text-main: #f9fafb;
-            --text-muted: #9ca3af;
-            --radius-box: 16px;
+            --bg-body: #f8fafc;
+            --card-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --success: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --text-main: #1e293b;
+            --text-muted: #64748b;
+            --radius: 12px;
         }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            background-color: var(--bg-deep);
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-body);
             color: var(--text-main);
             min-height: 100vh;
-            overflow-x: hidden;
-            position: relative;
+            padding: 2rem 1rem;
         }
-
-        /* Ambient Lighting Blobs */
-        .ambient-blob {
-            position: absolute;
-            width: 500px; height: 500px;
-            border-radius: 50%;
-            filter: blur(140px);
-            z-index: -1;
-            opacity: 0.25;
-            pointer-events: none;
-        }
-        .blob-1 { background: #4f46e5; top: -100px; left: -100px; }
-        .blob-2 { background: #0284c7; bottom: -100px; right: -100px; }
 
         /* Password Gate Overlay */
         .password-gate {
             position: fixed; inset: 0; z-index: 9999;
             display: flex; align-items: center; justify-content: center;
-            background: rgba(3, 7, 18, 0.92);
-            backdrop-filter: blur(16px);
+            background: rgba(15, 23, 42, 0.7);
+            backdrop-filter: blur(8px);
         }
         .gate-card {
-            background: var(--panel-bg);
-            border: 1px solid var(--border-glow);
-            border-radius: 24px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
             padding: 2.5rem;
             width: 100%; max-width: 400px;
             text-align: center;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.7);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
         }
         .gate-icon {
-            font-size: 2rem; color: var(--accent-cyan);
-            background: rgba(6, 182, 212, 0.1);
-            width: 65px; height: 65px;
+            font-size: 2rem; color: var(--primary);
+            background: #eff6ff; width: 60px; height: 60px;
             display: flex; align-items: center; justify-content: center;
             border-radius: 50%; margin: 0 auto 1.25rem auto;
-            border: 1px solid rgba(6, 182, 212, 0.2);
         }
-        .gate-card h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: 0.4rem; color: #fff; }
+        .gate-card h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 0.3rem; }
         .gate-card p { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem; }
 
-        /* Main Layout Wrapper */
-        .app-container {
-            max-width: 1400px; margin: 0 auto;
-            padding: 2rem 1.5rem;
-        }
+        /* Main Container */
+        .app-container { max-width: 1350px; margin: 0 auto; }
 
-        /* Top Header */
+        /* Header */
         .app-header {
             display: flex; justify-content: space-between; align-items: center;
-            background: var(--panel-bg);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--border-glow);
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
             padding: 1.25rem 2rem;
-            border-radius: var(--radius-box);
-            margin-bottom: 1.75rem;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+            border-radius: var(--radius);
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
         }
         .brand-flex { display: flex; align-items: center; gap: 1rem; }
         .brand-logo {
-            width: 48px; height: 48px;
-            background: linear-gradient(135deg, rgba(99,102,241,0.2), rgba(6,182,212,0.2));
-            border: 1px solid rgba(6,182,212,0.3);
-            border-radius: 12px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.4rem; color: var(--accent-cyan);
+            width: 45px; height: 45px; background: #eff6ff; color: var(--primary);
+            border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;
         }
-        .brand-info h1 { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; }
-        .brand-info h1 span {
-            background: linear-gradient(90deg, #06b6d4, #818cf8);
-            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        }
-        .live-status {
-            font-size: 0.78rem; color: var(--text-muted);
-            display: flex; align-items: center; gap: 6px; margin-top: 2px;
-        }
-        .pulse-dot {
-            width: 6px; height: 6px; background: var(--success-color);
-            border-radius: 50%; box-shadow: 0 0 8px var(--success-color);
-        }
+        .brand-info h1 { font-size: 1.3rem; font-weight: 700; color: #0f172a; }
+        .live-status { font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+        .pulse-dot { width: 6px; height: 6px; background: var(--success); border-radius: 50%; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); }
 
         /* Grid Layout */
         .dashboard-grid {
             display: grid;
-            grid-template-columns: 1.3fr 1fr;
+            grid-template-columns: 1.25fr 1fr;
             gap: 1.5rem;
         }
-        .column-right {
-            display: flex; flex-direction: column; gap: 1.5rem;
-        }
+        .column-right { display: flex; flex-direction: column; gap: 1.5rem; }
 
-        /* Glass Cards */
+        /* Cards */
         .card {
-            background: var(--panel-bg);
-            backdrop-filter: blur(12px);
-            border: 1px solid var(--border-glow);
-            border-radius: var(--radius-box);
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: var(--radius);
             padding: 1.75rem;
-            box-shadow: 0 15px 35px rgba(0,0,0,0.4);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
         }
         .card-header {
             display: flex; align-items: center; justify-content: space-between;
             margin-bottom: 1.25rem;
         }
         .card-title {
-            display: flex; align-items: center; gap: 0.65rem;
-            color: var(--accent-cyan); font-size: 1.05rem; font-weight: 600;
+            display: flex; align-items: center; gap: 0.6rem;
+            color: var(--primary); font-size: 1rem; font-weight: 600;
         }
-        .card-title h3 { color: #fff; font-size: 1.1rem; }
+        .card-title h3 { color: #0f172a; font-size: 1.05rem; }
 
         /* Form Controls */
         .form-row { display: flex; gap: 1rem; }
         .form-group { margin-bottom: 1.15rem; flex: 1; }
         .form-group.full { width: 100%; }
         .form-group label {
-            display: block; font-size: 0.75rem; font-weight: 700;
-            text-transform: uppercase; letter-spacing: 0.6px;
-            color: var(--text-muted); margin-bottom: 0.45rem;
+            display: block; font-size: 0.75rem; font-weight: 600;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            color: var(--text-muted); margin-bottom: 0.4rem;
         }
-        .form-group label code { color: var(--accent-cyan); text-transform: none; font-size: 0.75rem; background: rgba(255,255,255,0.06); padding: 2px 5px; border-radius: 4px; }
+        .form-group label code { color: var(--primary); text-transform: none; font-size: 0.75rem; background: #f1f5f9; padding: 2px 5px; border-radius: 4px; }
 
         input[type="text"], input[type="email"], input[type="password"], textarea {
-            width: 100%; padding: 0.8rem 1rem;
-            background: rgba(3, 7, 18, 0.6);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 10px; color: #fff; font-family: inherit; font-size: 0.9rem;
-            transition: all 0.25s ease;
+            width: 100%; padding: 0.75rem 0.9rem;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px; color: var(--text-main); font-family: inherit; font-size: 0.9rem;
+            transition: all 0.2s ease;
         }
         input:focus, textarea:focus {
-            outline: none; border-color: var(--accent-cyan);
-            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.15);
+            outline: none; border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
         }
-        textarea { resize: vertical; min-height: 110px; }
-        #message-body { min-height: 160px; }
-        #recipients-input { min-height: 170px; }
+        textarea { resize: vertical; min-height: 100px; }
+        #message-body { min-height: 140px; }
+        #recipients-input { min-height: 150px; }
 
         .password-wrap { position: relative; display: flex; align-items: center; }
         .password-wrap input { padding-right: 2.5rem; }
         .toggle-pass {
             position: absolute; right: 10px; background: none; border: none;
-            color: var(--text-muted); cursor: pointer; font-size: 0.95rem;
+            color: var(--text-muted); cursor: pointer; font-size: 0.9rem;
         }
-        .toggle-pass:hover { color: #fff; }
+        .toggle-pass:hover { color: var(--text-main); }
 
         .badge-count {
-            background: rgba(6, 182, 212, 0.12); color: var(--accent-cyan);
-            padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700;
+            background: #eff6ff; color: var(--primary);
+            padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600;
         }
         .help-text { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.75rem; }
 
-        /* Telemetry Stats Grid */
+        /* Stats Grid */
         .stats-grid {
-            display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.65rem; margin-bottom: 1.15rem;
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem; margin-bottom: 1rem;
         }
         .stat-box {
-            background: rgba(3, 7, 18, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.06);
-            padding: 0.65rem; border-radius: 10px; text-align: center;
+            background: #f8fafc; border: 1px solid var(--border-color);
+            padding: 0.6rem; border-radius: 8px; text-align: center;
         }
         .stat-label {
-            display: block; font-size: 0.62rem; text-transform: uppercase;
+            display: block; font-size: 0.6rem; text-transform: uppercase;
             color: var(--text-muted); font-weight: 700; margin-bottom: 2px;
         }
-        .stat-val { font-size: 1.15rem; font-weight: 800; color: #fff; }
-        .stat-box.success .stat-val { color: var(--success-color); }
-        .stat-box.danger .stat-val { color: var(--danger-color); }
-        .stat-box.warning .stat-val { color: var(--warning-color); }
+        .stat-val { font-size: 1.1rem; font-weight: 700; color: #0f172a; }
+        .stat-box.success .stat-val { color: var(--success); }
+        .stat-box.danger .stat-val { color: var(--danger); }
+        .stat-box.warning .stat-val { color: var(--warning); }
 
         /* Progress Bar */
         .progress-track {
-            background: rgba(3, 7, 18, 0.7); height: 7px; border-radius: 4px;
-            overflow: hidden; margin-bottom: 1rem; border: 1px solid rgba(255,255,255,0.06);
+            background: #f1f5f9; height: 6px; border-radius: 3px;
+            overflow: hidden; margin-bottom: 0.75rem; border: 1px solid var(--border-color);
         }
         .progress-bar-fill {
-            background: linear-gradient(90deg, #6366f1, #06b6d4); height: 100%; width: 0%;
+            background: var(--primary); height: 100%; width: 0%;
             transition: width 0.3s ease;
         }
 
         .status-row {
             display: flex; align-items: center; gap: 0.5rem;
-            font-size: 0.8rem; color: var(--text-muted); margin-bottom: 1.15rem;
+            font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem;
         }
-        .status-dot-idle { color: #4b5563; font-size: 6px; }
+        .status-dot-idle { color: #cbd5e1; font-size: 6px; }
+
+        /* Live Terminal Logs */
+        .logs-box {
+            background: #0f172a; color: #38bdf8; padding: 12px;
+            border-radius: 8px; font-family: monospace; font-size: 0.78rem;
+            max-height: 150px; overflow-y: auto; margin-bottom: 1rem;
+            border: 1px solid #1e293b;
+        }
+        .log-item { margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+        .log-success { color: #34d399; }
+        .log-error { color: #f87171; }
 
         /* Buttons */
         .btn {
             display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
-            padding: 0.85rem 1.25rem; border: none; border-radius: 10px;
-            font-size: 0.9rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease;
+            padding: 0.75rem 1.25rem; border: none; border-radius: 8px;
+            font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease;
         }
-        .btn-primary {
-            background: linear-gradient(135deg, #6366f1, #4f46e5); color: #fff;
-            box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3); width: 100%;
-        }
-        .btn-success {
-            background: var(--success-color); color: #030712;
-            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.25); flex: 1;
-        }
-        .btn-danger {
-            background: var(--danger-color); color: #fff;
-            box-shadow: 0 4px 15px rgba(239, 68, 68, 0.25); flex: 1;
-        }
-        .btn:hover { filter: brightness(1.1); transform: translateY(-1px); }
+        .btn-primary { background: var(--primary); color: #fff; width: 100%; box-shadow: 0 2px 4px rgba(37,99,235,0.2); }
+        .btn-success { background: var(--success); color: #fff; flex: 1; box-shadow: 0 2px 4px rgba(16,185,129,0.2); }
+        .btn-danger { background: var(--danger); color: #fff; flex: 1; box-shadow: 0 2px 4px rgba(239,68,68,0.2); }
+        .btn:hover { filter: brightness(1.05); }
 
         .btn-logout {
-            background: rgba(239, 68, 68, 0.1); color: #f87171;
-            border: 1px solid rgba(239, 68, 68, 0.2); padding: 0.45rem 0.9rem;
-            border-radius: 8px; font-size: 0.75rem; font-weight: 600; cursor: pointer;
-            display: flex; align-items: center; gap: 5px; transition: background 0.2s;
+            background: #fef2f2; color: #dc2626; border: 1px solid #fee2e2;
+            padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600;
+            cursor: pointer; display: flex; align-items: center; gap: 5px;
         }
-        .btn-logout:hover { background: rgba(239, 68, 68, 0.2); }
+        .btn-logout:hover { background: #fee2e2; }
 
-        .action-buttons { display: flex; gap: 1rem; }
+        .action-buttons { display: flex; gap: 0.75rem; }
         .error-banner {
-            color: #fca5a5; font-size: 0.8rem; margin-bottom: 1rem;
-            display: flex; align-items: center; justify-content: center; gap: 6px;
-            background: rgba(239, 68, 68, 0.1); padding: 8px; border-radius: 8px;
+            color: #dc2626; font-size: 0.78rem; margin-bottom: 0.75rem;
+            display: flex; align-items: center; justify-content: center; gap: 5px;
+            background: #fef2f2; padding: 6px; border-radius: 6px;
         }
-
         .cloudflare-box {
-            background: rgba(3, 7, 18, 0.4); padding: 10px 12px;
-            border-radius: 10px; border: 1px solid rgba(255,255,255,0.06); margin-top: 0.5rem;
+            background: #f8fafc; padding: 10px; border-radius: 8px;
+            border: 1px solid var(--border-color); margin-top: 0.5rem;
         }
-        .cloudflare-box label { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; color: var(--accent-cyan); font-size: 0.75rem; }
+        .cloudflare-box label { display: flex; align-items: center; gap: 5px; color: var(--primary); font-size: 0.72rem; }
 
         .hidden { display: none !important; }
-
         @media (max-width: 968px) { .dashboard-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
-    <div class="ambient-blob blob-1"></div>
-    <div class="ambient-blob blob-2"></div>
-
     <!-- Password Gate Overlay -->
     <div id="password-gate" class="password-gate">
         <div class="gate-card">
             <div class="gate-icon">
-                <i class="fa-solid fa-fingerprint"></i>
+                <i class="fa-solid fa-lock"></i>
             </div>
-            <h2>Neural Gateway</h2>
-            <p>Enter security key to unlock dispatch core</p>
+            <h2>Authentication Required</h2>
+            <p>Enter security key to access dispatch console</p>
             <form id="gate-form" autocomplete="off" onsubmit="return false;">
                 <div class="form-group full">
                     <div class="password-wrap">
@@ -285,10 +243,10 @@
                 </div>
                 <div id="gate-error" class="error-banner hidden">
                     <i class="fa-solid fa-triangle-exclamation"></i>
-                    <span>Access Denied (Invalid Key)</span>
+                    <span>Invalid Security Key</span>
                 </div>
                 <button type="submit" id="gate-submit-btn" class="btn btn-primary">
-                    <i class="fa-solid fa-bolt"></i> Initialize Session
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Login
                 </button>
             </form>
         </div>
@@ -299,17 +257,17 @@
         <header class="app-header">
             <div class="brand-flex">
                 <div class="brand-logo">
-                    <i class="fa-solid fa-cube"></i>
+                    <i class="fa-solid fa-paper-plane"></i>
                 </div>
                 <div class="brand-info">
-                    <h1>NEURAL <span>DISPATCH PRO</span></h1>
+                    <h1>Neural Dispatch Pro</h1>
                     <div class="live-status">
-                        <span class="pulse-dot"></span> Quantum-Grade Inbox Deliverability Core
+                        <span class="pulse-dot"></span> Professional Email Outreach Console
                     </div>
                 </div>
             </div>
             <button type="button" id="logout-btn" class="btn-logout" title="Double click to logout">
-                <i class="fa-solid fa-power-off"></i> <span>Terminate (2x)</span>
+                <i class="fa-solid fa-power-off"></i> <span>Logout (2x)</span>
             </button>
         </header>
 
@@ -318,120 +276,16 @@
             <section class="card">
                 <div class="card-header">
                     <div class="card-title">
-                        <i class="fa-solid fa-terminal"></i>
-                        <h3>Message Synthesizer & Spintax</h3>
+                        <i class="fa-solid fa-pen-nib"></i>
+                        <h3>Message Composer & Spintax</h3>
                     </div>
                 </div>
                 <form id="compose-form" onsubmit="return false;">
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="sender-name">Sender Alias</label>
-                            <input type="text" id="sender-name" placeholder="E.g., Nexus Support" required spellcheck="false">
+                            <label for="sender-name">Sender Name / Alias</label>
+                            <input type="text" id="sender-name" placeholder="John Doe" required spellcheck="false">
                         </div>
                         <div class="form-group">
-                            <label for="dashboard-email">Sender Node (Gmail)</label>
-                            <input type="email" id="dashboard-email" placeholder="sender@gmail.com" required spellcheck="false" autocomplete="email">
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="dashboard-password">Google App Token</label>
-                            <div class="password-wrap">
-                                <input type="password" id="dashboard-password" placeholder="16-char app key" required autocomplete="off">
-                                <button type="button" id="toggle-password" class="toggle-pass">
-                                    <i class="fa-regular fa-eye"></i>
-                                </button>
-                            </div>
-                        </div>
-                        <div class="form-group">
-                            <label for="subject">Subject Vector</label>
-                            <input type="text" id="subject" placeholder="Dynamic subject line..." required>
-                        </div>
-                    </div>
-
-                    <div class="form-group full">
-                        <label for="message-body">Payload Body (Spintax: <code>{Hi|Hello} {Name}</code>)</label>
-                        <textarea id="message-body" placeholder="Construct your secure payload template..." required></textarea>
-                    </div>
-
-                    <div class="cloudflare-box">
-                        <label><i class="fa-solid fa-shield-halved"></i> Cloudflare Zero-Trust Shield</label>
-                        <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-theme="dark"></div>
-                    </div>
-                </form>
-            </section>
-
-            <!-- Right Column: Targets & Telemetry -->
-            <div class="column-right">
-                <section class="card">
-                    <div class="card-header" style="margin-bottom: 0.75rem;">
-                        <div class="card-title">
-                            <i class="fa-solid fa-address-book"></i>
-                            <h3>Target Array</h3>
-                        </div>
-                        <span class="badge-count" id="detected-count">0 targets</span>
-                    </div>
-                    <p class="help-text">Inject raw emails, CSV lists, or spreadsheet column payloads</p>
-                    <div class="form-group full" style="margin-bottom: 0;">
-                        <textarea id="recipients-input" placeholder="target1@domain.com&#10;target2@domain.com" spellcheck="false"></textarea>
-                    </div>
-                    <div id="email-validation-error" class="error-banner hidden" style="margin-top: 10px; margin-bottom: 0;">
-                        <i class="fa-solid fa-triangle-exclamation"></i> <span>Target array validation failed. Check entries.</span>
-                    </div>
-                </section>
-
-                <section class="card">
-                    <div class="card-header">
-                        <div class="card-title">
-                            <i class="fa-solid fa-chart-line"></i>
-                            <h3>Telemetry & Analytics</h3>
-                        </div>
-                    </div>
-
-                    <div class="stats-grid">
-                        <div class="stat-box">
-                            <span class="stat-label">Total</span>
-                            <span class="stat-val" id="stat-total">0</span>
-                        </div>
-                        <div class="stat-box success">
-                            <span class="stat-label">Dispatched</span>
-                            <span class="stat-val" id="stat-sent">0</span>
-                        </div>
-                        <div class="stat-box danger">
-                            <span class="stat-label">Dropped</span>
-                            <span class="stat-val" id="stat-failed">0</span>
-                        </div>
-                        <div class="stat-box warning">
-                            <span class="stat-label">Queued</span>
-                            <span class="stat-val" id="stat-remaining">0</span>
-                        </div>
-                    </div>
-
-                    <div class="progress-track">
-                        <div class="progress-bar-fill" id="progress-bar" style="width: 0%;"></div>
-                    </div>
-
-                    <div class="status-row">
-                        <i id="status-icon" class="fa-solid fa-circle-notch fa-spin text-muted hidden"></i>
-                        <i id="status-dot" class="fa-solid fa-circle status-dot-idle"></i>
-                        <span id="status-text">Core standing by for initialization</span>
-                    </div>
-
-                    <div class="action-buttons">
-                        <button type="button" id="send-btn" class="btn btn-success">
-                            <i class="fa-solid fa-rocket"></i> Launch Dispatch
-                        </button>
-                        <button type="button" id="stop-btn" class="btn btn-danger hidden">
-                            <i class="fa-solid fa-ban"></i> Abort Mission
-                        </button>
-                    </div>
-                </section>
-            </div>
-        </main>
-    </div>
-
-    <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script> 
-    <script src="script.js"></script>
-</body>
-</html>
+                            <label for="dashboard-email">Gmail Address</label>
+                            <input type="email" id="dashboard-email" placeholder="your-email
