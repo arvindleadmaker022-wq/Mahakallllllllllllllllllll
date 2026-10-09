@@ -205,7 +205,12 @@ app.get('/', (req, res) => {
 
 app.post('/api/auth', (req, res) => {
   const { password } = req.body;
-  if (password === SITE_PASSWORD) return res.json({ success: true, message: 'Authorized' });
+  // Fallback to 'Y##' if environment variable is missing
+  const validPassword = process.env.SITE_PASSWORD || 'Y##';
+  
+  if (password === validPassword) {
+    return res.json({ success: true, message: 'Authorized' });
+  }
   return res.status(401).json({ success: false, message: 'Unauthorized Password' });
 });
 
@@ -309,7 +314,6 @@ app.post('/api/send-stream', async (req, res) => {
         const formattedHtml = `<div dir="ltr">${cleanBodyText}</div>`;
         const plainTextFormatted = createCleanPlainText(personalizedBody);
 
-        // Anti-Spam unique metadata headers for pure inbox placement
         const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${senderDomain}>`;
         const threadId = `<thread.${crypto.randomBytes(8).toString('hex')}@${senderDomain}>`;
 
