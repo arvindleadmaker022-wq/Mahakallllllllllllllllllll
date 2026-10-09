@@ -22,7 +22,9 @@ export default {
     try {
       if (path === '/api/auth' && request.method === 'POST') {
         const body = await request.json();
-        if (body.password === (env.SITE_PASSWORD || SITE_PASSWORD)) {
+        const targetPassword = env && env.SITE_PASSWORD ? env.SITE_PASSWORD : SITE_PASSWORD;
+        
+        if (body.password === targetPassword) {
           return new Response(JSON.stringify({ success: true, message: "Access granted" }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
