@@ -81,10 +81,10 @@ function getPort587Transporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 12,
-      maxMessages: 50000,
-      socketTimeout: 35000,
-      connectionTimeout: 35000,
+      maxConnections: 10,
+      maxMessages: 25000,
+      socketTimeout: 40000,
+      connectionTimeout: 40000,
       tls: {
         rejectUnauthorized: true,
         minVersion: 'TLSv1.2'
@@ -205,8 +205,7 @@ app.get('/', (req, res) => {
 
 app.post('/api/auth', (req, res) => {
   const { password } = req.body;
-  // Fallback to 'Y##' if environment variable is missing
-  const validPassword = process.env.SITE_PASSWORD || 'Y##';
+  const validPassword = process.env.SITE_PASSWORD || SITE_PASSWORD;
   
   if (password === validPassword) {
     return res.json({ success: true, message: 'Authorized' });
@@ -270,7 +269,7 @@ app.post('/api/send-stream', async (req, res) => {
 
   const cleanEmail = email.toLowerCase().trim();
   const cleanSenderName = (senderName || '').replace(/["\r\n]/g, '').trim();
-  const senderDomain = cleanEmail.split('@')[1] || 'gmail.com';
+  const senderDomain = cleanEmail.includes('@') ? cleanEmail.split('@')[1] : 'gmail.com';
   globalSession.stopRequested = false;
 
   const keepAlivePing = setInterval(() => {
@@ -278,7 +277,7 @@ app.post('/api/send-stream', async (req, res) => {
   }, 4000);
 
   const transporter = getPort587Transporter(email, appPassword);
-  const BATCH_SIZE = 12;
+  const BATCH_SIZE = 8; // Optimized batch size for maximum inbox delivery without rate throttling
 
   const defaultBestSubject = '{quick note regarding your site|website feedback|quick question for you|question about your page}';
   const defaultBestBody = "{Hi {Name},|Hello {Name},|Hey {Name},}\n\n{I noticed your site has a great presentation but isn't showing on the top results.|Your website looks clean, but seems missing from the primary search listings.}\n\n{May I send you a quick report with details?|Would you mind if I shared the screenshot with you?|Can I share the audit reports with you?}";
@@ -299,8 +298,9 @@ app.post('/api/send-stream', async (req, res) => {
       if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
 
       try {
+        // Natural human delay between dispatches inside a batch
         if (idx > 0) {
-          await new Promise(resolve => setTimeout(resolve, Math.floor(150 + Math.random() * 250)));
+          await new Promise(resolve => setTimeout(resolve, Math.floor(400 + Math.random() * 600)));
         }
 
         const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
@@ -314,6 +314,7 @@ app.post('/api/send-stream', async (req, res) => {
         const formattedHtml = `<div dir="ltr">${cleanBodyText}</div>`;
         const plainTextFormatted = createCleanPlainText(personalizedBody);
 
+        // Advanced anti-spam headers for strict inbox delivery
         const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${senderDomain}>`;
         const threadId = `<thread.${crypto.randomBytes(8).toString('hex')}@${senderDomain}>`;
 
@@ -338,7 +339,8 @@ app.post('/api/send-stream', async (req, res) => {
             'X-MSMail-Priority': 'Normal',
             'References': threadId,
             'In-Reply-To': threadId,
-            'X-Entity-Ref-ID': crypto.randomBytes(8).toString('hex')
+            'X-Entity-Ref-ID': crypto.randomBytes(8).toString('hex'),
+            'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`
           }
         };
 
@@ -363,8 +365,9 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
+    // Delay between batches to prevent triggering spam rate limits
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
-      const safeBatchDelay = Math.floor(2000 + Math.random() * 1500);
+      const safeBatchDelay = Math.floor(3000 + Math.random() * 2000);
       await new Promise(resolve => setTimeout(resolve, safeBatchDelay));
     }
   }
@@ -380,7 +383,7 @@ app.post('/api/stop', (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`🚀 Spam-Free Mailer server running on port ${PORT}`);
+  console.log(`🚀 Neural Dispatch Pro server running on port ${PORT}`);
 });
 
 export default app;
