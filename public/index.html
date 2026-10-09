@@ -10,16 +10,16 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         :root {
-            --bg-body: #f8fafc;
+            --bg-body: #f4f6f9;
             --card-bg: #ffffff;
-            --border-color: #e2e8f0;
+            --border-color: #cbd5e1;
             --primary: #2563eb;
             --primary-hover: #1d4ed8;
-            --success: #10b981;
-            --danger: #ef4444;
-            --warning: #f59e0b;
-            --text-main: #1e293b;
-            --text-muted: #64748b;
+            --success: #059669;
+            --danger: #dc2626;
+            --warning: #d97706;
+            --text-main: #0f172a;
+            --text-muted: #475569;
             --radius: 12px;
         }
 
@@ -36,8 +36,8 @@
         .password-gate {
             position: fixed; inset: 0; z-index: 9999;
             display: flex; align-items: center; justify-content: center;
-            background: rgba(15, 23, 42, 0.7);
-            backdrop-filter: blur(8px);
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(6px);
         }
         .gate-card {
             background: var(--card-bg);
@@ -53,8 +53,9 @@
             background: #eff6ff; width: 60px; height: 60px;
             display: flex; align-items: center; justify-content: center;
             border-radius: 50%; margin: 0 auto 1.25rem auto;
+            border: 1px solid #bfdbfe;
         }
-        .gate-card h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 0.3rem; }
+        .gate-card h2 { font-size: 1.35rem; font-weight: 700; margin-bottom: 0.3rem; color: #0f172a; }
         .gate-card p { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem; }
 
         /* Main Container */
@@ -74,10 +75,11 @@
         .brand-logo {
             width: 45px; height: 45px; background: #eff6ff; color: var(--primary);
             border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 1.25rem;
+            border: 1px solid #bfdbfe;
         }
-        .brand-info h1 { font-size: 1.3rem; font-weight: 700; color: #0f172a; }
+        .brand-info h1 { font-size: 1.35rem; font-weight: 700; color: #0f172a; letter-spacing: -0.3px; }
         .live-status { font-size: 0.78rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; margin-top: 2px; }
-        .pulse-dot { width: 6px; height: 6px; background: var(--success); border-radius: 50%; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); }
+        .pulse-dot { width: 6px; height: 6px; background: var(--success); border-radius: 50%; box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.2); }
 
         /* Grid Layout */
         .dashboard-grid {
@@ -110,11 +112,11 @@
         .form-group { margin-bottom: 1.15rem; flex: 1; }
         .form-group.full { width: 100%; }
         .form-group label {
-            display: block; font-size: 0.75rem; font-weight: 600;
+            display: block; font-size: 0.75rem; font-weight: 700;
             text-transform: uppercase; letter-spacing: 0.5px;
             color: var(--text-muted); margin-bottom: 0.4rem;
         }
-        .form-group label code { color: var(--primary); text-transform: none; font-size: 0.75rem; background: #f1f5f9; padding: 2px 5px; border-radius: 4px; }
+        .form-group label code { color: var(--primary); text-transform: none; font-size: 0.75rem; background: #e2e8f0; padding: 2px 5px; border-radius: 4px; font-weight: 600; }
 
         input[type="text"], input[type="email"], input[type="password"], textarea {
             width: 100%; padding: 0.75rem 0.9rem;
@@ -125,11 +127,11 @@
         }
         input:focus, textarea:focus {
             outline: none; border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
         }
-        textarea { resize: vertical; min-height: 100px; }
-        #message-body { min-height: 140px; }
-        #recipients-input { min-height: 150px; }
+        textarea { resize: vertical; min-height: 110px; }
+        #message-body { min-height: 150px; }
+        #recipients-input { min-height: 160px; }
 
         .password-wrap { position: relative; display: flex; align-items: center; }
         .password-wrap input { padding-right: 2.5rem; }
@@ -141,7 +143,8 @@
 
         .badge-count {
             background: #eff6ff; color: var(--primary);
-            padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600;
+            padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700;
+            border: 1px solid #bfdbfe;
         }
         .help-text { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 0.75rem; }
 
@@ -157,15 +160,15 @@
             display: block; font-size: 0.6rem; text-transform: uppercase;
             color: var(--text-muted); font-weight: 700; margin-bottom: 2px;
         }
-        .stat-val { font-size: 1.1rem; font-weight: 700; color: #0f172a; }
+        .stat-val { font-size: 1.1rem; font-weight: 800; color: #0f172a; }
         .stat-box.success .stat-val { color: var(--success); }
         .stat-box.danger .stat-val { color: var(--danger); }
         .stat-box.warning .stat-val { color: var(--warning); }
 
         /* Progress Bar */
         .progress-track {
-            background: #f1f5f9; height: 6px; border-radius: 3px;
-            overflow: hidden; margin-bottom: 0.75rem; border: 1px solid var(--border-color);
+            background: #e2e8f0; height: 7px; border-radius: 4px;
+            overflow: hidden; margin-bottom: 0.75rem; border: 1px solid #cbd5e1;
         }
         .progress-bar-fill {
             background: var(--primary); height: 100%; width: 0%;
@@ -174,35 +177,36 @@
 
         .status-row {
             display: flex; align-items: center; gap: 0.5rem;
-            font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem;
+            font-size: 0.78rem; color: var(--text-muted); margin-bottom: 1rem; font-weight: 500;
         }
-        .status-dot-idle { color: #cbd5e1; font-size: 6px; }
+        .status-dot-idle { color: #94a3b8; font-size: 6px; }
 
-        /* Live Terminal Logs */
-        .logs-box {
+        /* Live Terminal Logs Window */
+        .logs-container {
             background: #0f172a; color: #38bdf8; padding: 12px;
             border-radius: 8px; font-family: monospace; font-size: 0.78rem;
-            max-height: 150px; overflow-y: auto; margin-bottom: 1rem;
-            border: 1px solid #1e293b;
+            max-height: 160px; overflow-y: auto; margin-bottom: 1.15rem;
+            border: 1px solid #334155; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
         }
-        .log-item { margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
+        .log-line { margin-bottom: 5px; display: flex; align-items: flex-start; gap: 6px; word-break: break-all; }
         .log-success { color: #34d399; }
         .log-error { color: #f87171; }
+        .log-info { color: #93c5fd; }
 
         /* Buttons */
         .btn {
             display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
-            padding: 0.75rem 1.25rem; border: none; border-radius: 8px;
-            font-size: 0.88rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease;
+            padding: 0.8rem 1.25rem; border: none; border-radius: 8px;
+            font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease;
         }
         .btn-primary { background: var(--primary); color: #fff; width: 100%; box-shadow: 0 2px 4px rgba(37,99,235,0.2); }
-        .btn-success { background: var(--success); color: #fff; flex: 1; box-shadow: 0 2px 4px rgba(16,185,129,0.2); }
-        .btn-danger { background: var(--danger); color: #fff; flex: 1; box-shadow: 0 2px 4px rgba(239,68,68,0.2); }
+        .btn-success { background: var(--success); color: #fff; flex: 1; box-shadow: 0 2px 4px rgba(5,150,105,0.2); }
+        .btn-danger { background: var(--danger); color: #fff; flex: 1; box-shadow: 0 2px 4px rgba(220,38,38,0.2); }
         .btn:hover { filter: brightness(1.05); }
 
         .btn-logout {
             background: #fef2f2; color: #dc2626; border: 1px solid #fee2e2;
-            padding: 0.4rem 0.8rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600;
+            padding: 0.45rem 0.9rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600;
             cursor: pointer; display: flex; align-items: center; gap: 5px;
         }
         .btn-logout:hover { background: #fee2e2; }
@@ -211,13 +215,13 @@
         .error-banner {
             color: #dc2626; font-size: 0.78rem; margin-bottom: 0.75rem;
             display: flex; align-items: center; justify-content: center; gap: 5px;
-            background: #fef2f2; padding: 6px; border-radius: 6px;
+            background: #fef2f2; padding: 8px; border-radius: 6px; border: 1px solid #fee2e2;
         }
         .cloudflare-box {
-            background: #f8fafc; padding: 10px; border-radius: 8px;
-            border: 1px solid var(--border-color); margin-top: 0.5rem;
+            background: #f8fafc; padding: 12px; border-radius: 8px;
+            border: 1px solid var(--border-color); margin-top: 0.75rem;
         }
-        .cloudflare-box label { display: flex; align-items: center; gap: 5px; color: var(--primary); font-size: 0.72rem; }
+        .cloudflare-box label { display: flex; align-items: center; gap: 6px; color: var(--primary); font-size: 0.75rem; font-weight: 700; margin-bottom: 6px; }
 
         .hidden { display: none !important; }
         @media (max-width: 968px) { .dashboard-grid { grid-template-columns: 1fr; } }
@@ -230,12 +234,12 @@
             <div class="gate-icon">
                 <i class="fa-solid fa-lock"></i>
             </div>
-            <h2>Authentication Required</h2>
-            <p>Enter security key to access dispatch console</p>
+            <h2>Secure Console Access</h2>
+            <p>Enter security key to unlock dispatch center</p>
             <form id="gate-form" autocomplete="off" onsubmit="return false;">
                 <div class="form-group full">
                     <div class="password-wrap">
-                        <input type="password" id="gate-password" placeholder="Security key..." autocomplete="current-password" required>
+                        <input type="password" id="gate-password" placeholder="Enter security key..." autocomplete="current-password" required>
                         <button type="button" id="toggle-gate-password" class="toggle-pass">
                             <i class="fa-regular fa-eye"></i>
                         </button>
@@ -243,10 +247,10 @@
                 </div>
                 <div id="gate-error" class="error-banner hidden">
                     <i class="fa-solid fa-triangle-exclamation"></i>
-                    <span>Invalid Security Key</span>
+                    <span>Access Denied (Incorrect Key)</span>
                 </div>
                 <button type="submit" id="gate-submit-btn" class="btn btn-primary">
-                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Login
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Authenticate
                 </button>
             </form>
         </div>
@@ -262,12 +266,12 @@
                 <div class="brand-info">
                     <h1>Neural Dispatch Pro</h1>
                     <div class="live-status">
-                        <span class="pulse-dot"></span> Professional Email Outreach Console
+                        <span class="pulse-dot"></span> Professional Outreach & Delivery Engine
                     </div>
                 </div>
             </div>
             <button type="button" id="logout-btn" class="btn-logout" title="Double click to logout">
-                <i class="fa-solid fa-power-off"></i> <span>Logout (2x)</span>
+                <i class="fa-solid fa-power-off"></i> <span>Terminate (2x)</span>
             </button>
         </header>
 
@@ -284,8 +288,40 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label for="sender-name">Sender Name / Alias</label>
-                            <input type="text" id="sender-name" placeholder="John Doe" required spellcheck="false">
+                            <input type="text" id="sender-name" placeholder="E.g., Support Team" required spellcheck="false">
                         </div>
                         <div class="form-group">
-                            <label for="dashboard-email">Gmail Address</label>
-                            <input type="email" id="dashboard-email" placeholder="your-email
+                            <label for="dashboard-email">Sender Node (Gmail)</label>
+                            <input type="email" id="dashboard-email" placeholder="sender@gmail.com" required spellcheck="false" autocomplete="email">
+                        </div>
+                    </div>
+
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="dashboard-password">16-Char App Token</label>
+                            <div class="password-wrap">
+                                <input type="password" id="dashboard-password" placeholder="abcd efgh ijkl mnop" required autocomplete="off">
+                                <button type="button" id="toggle-password" class="toggle-pass">
+                                    <i class="fa-regular fa-eye"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="subject">Subject Vector</label>
+                            <input type="text" id="subject" placeholder="{Quick question|Hello} {Name}" required>
+                        </div>
+                    </div>
+
+                    <div class="form-group full">
+                        <label for="message-body">Payload Body (Spintax: <code>{Hi|Hello} {Name}</code>)</label>
+                        <textarea id="message-body" placeholder="Construct your email payload template..." required></textarea>
+                    </div>
+
+                    <div class="cloudflare-box">
+                        <label><i class="fa-solid fa-shield-halved"></i> Cloudflare Zero-Trust Shield</label>
+                        <div class="cf-turnstile" data-sitekey="1x00000000000000000000AA" data-theme="light"></div>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Right Column: Targets & Live Logs /
