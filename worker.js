@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import nodemailer from 'nodemailer';
 
-const SITE_PASSWORD = 'changeme';
+const SITE_Y## = 'changeme';
 
 export default {
   async fetch(request, env, ctx) {
