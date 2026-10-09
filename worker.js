@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import nodemailer from 'nodemailer';
 
-const SITE_Y## = 'changeme';
+const SITE_PASSWORD = 'changeme';
 
 export default {
   async fetch(request, env, ctx) {
@@ -11,7 +11,7 @@ export default {
     // CORS Headers
     const corsHeaders = {
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 
+      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Access-Control-Allow-Headers': 'Content-Type',
     };
 
@@ -22,9 +22,7 @@ export default {
     try {
       if (path === '/api/auth' && request.method === 'POST') {
         const body = await request.json();
-        const targetPassword = env && env.SITE_PASSWORD ? env.SITE_PASSWORD : SITE_PASSWORD;
-        
-        if (body.password === targetPassword) {
+        if (body.password === (env.SITE_PASSWORD || SITE_PASSWORD)) {
           return new Response(JSON.stringify({ success: true, message: "Access granted" }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
