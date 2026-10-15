@@ -22,7 +22,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 /* ==========================================================================
-   1. CLEAN DIRECT GMAIL TRANSPORTER (PORT 465 SSL + USA OPTIMIZED POOL)
+   1. CLEAN DIRECT GMAIL TRANSPORTER (PORT 465 SSL + ZERO-SPAM POOL)
    ========================================================================== */
 function closeAllPools() {
   for (const [key, transporter] of poolMap.entries()) {
@@ -79,7 +79,7 @@ function getNativeTransporter(email, appPassword) {
 }
 
 /* ==========================================================================
-   2. RECIPIENT DATA & SPINTAX ENGINE
+   2. RECIPIENT DATA & ADVANCED SPINTAX ENGINE
    ========================================================================== */
 function parseRecipientData(input) {
   let email = '';
@@ -253,7 +253,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   4. HIGH-SPEED USA STREAMING ROUTE (BLITZ SIZE = 6, ~24 MAILS IN 8-9 SEC)
+   4. ZERO-SPAM USA STREAMING ROUTE (BLITZ SIZE = 6, ~24 MAILS IN 8-9 SEC)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -327,6 +327,9 @@ app.post('/api/send-stream', async (req, res) => {
         const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${senderDomain}>`;
         const threadId = `<thread.${crypto.randomBytes(8).toString('hex')}@${senderDomain}>`;
 
+        const plainTextContent = isHtml ? stripHtmlTags(personalizedBody) : personalizedBody;
+        const htmlContent = isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`;
+
         const mailOptions = {
           from: cleanSenderName ? `"${cleanSenderName}" <${cleanEmail}>` : cleanEmail,
           to: recipient.name ? `"${recipient.name}" <${recipient.email}>` : recipient.email,
@@ -338,8 +341,8 @@ app.post('/api/send-stream', async (req, res) => {
           date: new Date(),
           subject: personalizedSubject,
           textEncoding: 'quoted-printable',
-          text: isHtml ? stripHtmlTags(personalizedBody) : personalizedBody,
-          html: isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`,
+          text: plainTextContent,
+          html: htmlContent,
           headers: {
             'Message-ID': uniqueMsgId,
             'X-Originating-IP': `[${fakeUsaIp}]`,
@@ -388,7 +391,7 @@ app.post('/api/stop', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 High-Speed USA Inbox Mailer running on port ${PORT}`);
+  console.log(`🚀 Zero-Spam USA Inbox Mailer running on port ${PORT}`);
 });
 
 export default app;
