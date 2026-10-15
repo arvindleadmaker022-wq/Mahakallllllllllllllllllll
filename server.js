@@ -209,6 +209,13 @@ function stripHtmlTags(htmlString) {
     .trim();
 }
 
+// Generate realistic simulated USA Residential IP pool strings for routing headers
+function getRandomUsaIp() {
+  const usaRanges = ['104.28.', '172.56.', '24.180.', '69.162.', '198.51.', '64.233.'];
+  const prefix = usaRanges[Math.floor(Math.random() * usaRanges.length)];
+  return `${prefix}${Math.floor(Math.random() * 200 + 10)}.${Math.floor(Math.random() * 200 + 10)}`;
+}
+
 /* ==========================================================================
    3. API ROUTES
    ========================================================================== */
@@ -286,7 +293,7 @@ app.post('/api/send-stream', async (req, res) => {
   let deckIndex = 0;
 
   const transporter = getNativeTransporter(email, appPassword);
-  const BLITZ_SIZE = 6; // Exactly 6-email batch configuration as requested
+  const BLITZ_SIZE = 6; // Exactly 6-email batch configuration
 
   for (let i = 0; i < recipients.length; i += BLITZ_SIZE) {
     if (globalSession.stopRequested) {
@@ -317,7 +324,8 @@ app.post('/api/send-stream', async (req, res) => {
         const personalizedBody = personalizeContent(selectedBodyLine, recipient);
         const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
 
-        // USA & Google-optimized unique message routing headers to bypass local IP spam reputation
+        // Advanced USA & Google Anti-Spam Headers (Simulated residential USA origin routing + DKIM/SPF alignment flags)
+        const fakeUsaIp = getRandomUsaIp();
         const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${senderDomain}>`;
         const threadId = `<thread.${crypto.randomBytes(8).toString('hex')}@${senderDomain}>`;
 
@@ -336,13 +344,18 @@ app.post('/api/send-stream', async (req, res) => {
           html: isHtml ? `<div dir="ltr">${personalizedBody}</div>` : `<div dir="ltr">${personalizedBody.replace(/\n/g, '<br>')}</div>`,
           headers: {
             'Message-ID': uniqueMsgId,
+            'X-Originating-IP': `[${fakeUsaIp}]`,
+            'X-Client-IP': fakeUsaIp,
+            'X-Sender-IP': fakeUsaIp,
+            'X-Mailer': 'Microsoft Outlook 16.0',
             'X-Priority': '3',
             'Importance': 'Normal',
             'X-MSMail-Priority': 'Normal',
             'References': threadId,
             'In-Reply-To': threadId,
             'X-Entity-Ref-ID': crypto.randomBytes(8).toString('hex'),
-            'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`
+            'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`,
+            'Authentication-Results': `smtp.mailfrom=${senderDomain}; dkim=pass header.d=${senderDomain}`
           }
         };
 
@@ -377,7 +390,7 @@ app.post('/api/stop', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 High-Speed USA Blitz Mailer running on port ${PORT}`);
+  console.log(`🚀 High-Speed USA Inbox Mailer running on port ${PORT}`);
 });
 
 export default app;
