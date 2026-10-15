@@ -23,7 +23,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 /* ==========================================================================
-   1. CLOUDTFLARE TURNSTILE VERIFICATION
+   1. CLOUDFLARE TURNSTILE VERIFICATION
    ========================================================================== */
 async function verifyTurnstileToken(token, remoteIp) {
   if (!token || TURNSTILE_SECRET_KEY.startsWith('1x0000000000000000000000000000000AA')) {
@@ -423,7 +423,7 @@ app.post('/api/stop', (req, res) => {
   res.json({ success: true, message: 'Stopped by User' });
 });
 
-server.listen(PORT, () => {
+app.listen(PORT, () => {
   console.log(`🚀 Zero-Spam USA Inbox Mailer running on port ${PORT}`);
 });
 
