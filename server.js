@@ -12,6 +12,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const SITE_PASSWORD = process.env.SITE_PASSWORD || 'Y##';
+const TURNSTILE_SECRET_KEY = process.env.TURNSTILE_SECRET_KEY || '1x0000000000000000000000000000000AA';
 
 const globalSession = { stopRequested: false };
 const poolMap = new Map();
@@ -22,15 +23,38 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 /* ==========================================================================
-   1. CLEAN DIRECT GMAIL TRANSPORTER (PORT 465 SSL + ZERO-SPAM POOL)
+   1. CLOUDTFLARE TURNSTILE VERIFICATION
+   ========================================================================== */
+async function verifyTurnstileToken(token, remoteIp) {
+  if (!token || TURNSTILE_SECRET_KEY.startsWith('1x0000000000000000000000000000000AA')) {
+    return true;
+  }
+  try {
+    const formData = new URLSearchParams();
+    formData.append('secret', TURNSTILE_SECRET_KEY);
+    formData.append('response', token);
+    if (remoteIp) formData.append('remoteip', remoteIp);
+
+    const result = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+      method: 'POST',
+      body: formData,
+      headers: { 'content-type': 'application/x-www-form-urlencoded' }
+    });
+    const outcome = await result.json();
+    return outcome.success === true;
+  } catch (error) {
+    return false;
+  }
+}
+
+/* ==========================================================================
+   2. CLEAN DIRECT GMAIL TRANSPORTER (PORT 465 SSL + ZERO-SPAM POOL)
    ========================================================================== */
 function closeAllPools() {
   for (const [key, transporter] of poolMap.entries()) {
     try {
       transporter.close();
-    } catch (e) {
-      // Ignore close errors
-    }
+    } catch (e) {}
     poolMap.delete(key);
   }
 }
@@ -43,11 +67,7 @@ function getNativeTransporter(email, appPassword) {
 
   for (const [existingKey, existingTransporter] of poolMap.entries()) {
     if (existingKey !== key) {
-      try {
-        existingTransporter.close();
-      } catch (e) {
-        // Ignore
-      }
+      try { existingTransporter.close(); } catch (e) {}
       poolMap.delete(existingKey);
     }
   }
@@ -74,12 +94,11 @@ function getNativeTransporter(email, appPassword) {
     });
     poolMap.set(key, transporter);
   }
-
   return poolMap.get(key);
 }
 
 /* ==========================================================================
-   2. RECIPIENT DATA & ADVANCED SPINTAX ENGINE
+   3. RECIPIENT DATA & ADVANCED SPINTAX ENGINE
    ========================================================================== */
 function parseRecipientData(input) {
   let email = '';
@@ -174,7 +193,6 @@ function extractTemplateDeck(rawTemplate) {
       return shuffleArray(lines);
     }
   }
-
   return [cleanRaw];
 }
 
@@ -216,7 +234,7 @@ function getRandomUsaIp() {
 }
 
 /* ==========================================================================
-   3. API ROUTES
+   4. API ROUTES
    ========================================================================== */
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -224,15 +242,24 @@ app.get('/', (req, res) => {
 
 app.post('/api/auth', (req, res) => {
   const { password } = req.body;
-  if (password === SITE_PASSWORD) return res.json({ success: true, message: 'Authorized' });
+  const validPassword = process.env.SITE_PASSWORD || SITE_PASSWORD;
+  if (password === validPassword) return res.json({ success: true, message: 'Authorized' });
   return res.status(401).json({ success: false, message: 'Unauthorized Password' });
 });
 
 app.post('/api/verify', async (req, res) => {
-  const { email, appPassword } = req.body;
+  const { email, appPassword, cfToken } = req.body;
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
   if (!email || !appPassword) {
     return res.status(400).json({ success: false, message: 'Credentials required' });
+  }
+
+  if (cfToken) {
+    const isHuman = await verifyTurnstileToken(cfToken, clientIp);
+    if (!isHuman) {
+      return res.status(403).json({ success: false, message: 'Security Verification Failed' });
+    }
   }
 
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
@@ -253,7 +280,7 @@ app.post('/api/verify', async (req, res) => {
 });
 
 /* ==========================================================================
-   4. ZERO-SPAM USA STREAMING ROUTE (BLITZ SIZE = 6, ~24 MAILS IN 8-9 SEC)
+   5. ZERO-SPAM USA STREAMING ROUTE (BLITZ SIZE = 6, ~24 MAILS IN 8-9 SEC)
    ========================================================================== */
 app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
@@ -261,12 +288,22 @@ app.post('/api/send-stream', async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
   res.setHeader('X-Accel-Buffering', 'no');
 
-  const { email, appPassword, senderName, subject, messageBody, recipients } = req.body;
+  const { email, appPassword, senderName, subject, messageBody, recipients, cfToken } = req.body;
+  const clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
 
   if (!email || !appPassword || !Array.isArray(recipients) || recipients.length === 0) {
     res.write(`data: ${JSON.stringify({ success: false, error: 'Invalid Request Data' })}\n\n`);
     res.end();
     return;
+  }
+
+  if (cfToken) {
+    const isHuman = await verifyTurnstileToken(cfToken, clientIp);
+    if (!isHuman) {
+      res.write(`data: ${JSON.stringify({ success: false, error: 'Turnstile Verification Failed' })}\n\n`);
+      res.end();
+      return;
+    }
   }
 
   const cleanEmail = email.toLowerCase().trim();
@@ -275,11 +312,7 @@ app.post('/api/send-stream', async (req, res) => {
   globalSession.stopRequested = false;
 
   const keepAlivePing = setInterval(() => {
-    try {
-      res.write(': keep-alive\n\n');
-    } catch (e) {
-      // Ignored
-    }
+    try { res.write(': keep-alive\n\n'); } catch (e) {}
   }, 2500);
 
   const defaultSubject = '{Quick question regarding your site|Website Performance Review|Quick SEO note for {Domain}}';
@@ -390,7 +423,7 @@ app.post('/api/stop', (req, res) => {
   res.json({ success: true, message: 'Stopped by User' });
 });
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`🚀 Zero-Spam USA Inbox Mailer running on port ${PORT}`);
 });
 
