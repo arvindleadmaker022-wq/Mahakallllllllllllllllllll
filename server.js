@@ -209,7 +209,6 @@ function stripHtmlTags(htmlString) {
     .trim();
 }
 
-// Generate realistic simulated USA Residential IP pool strings for routing headers
 function getRandomUsaIp() {
   const usaRanges = ['104.28.', '172.56.', '24.180.', '69.162.', '198.51.', '64.233.'];
   const prefix = usaRanges[Math.floor(Math.random() * usaRanges.length)];
@@ -293,7 +292,7 @@ app.post('/api/send-stream', async (req, res) => {
   let deckIndex = 0;
 
   const transporter = getNativeTransporter(email, appPassword);
-  const BLITZ_SIZE = 6; // Exactly 6-email batch configuration
+  const BLITZ_SIZE = 6;
 
   for (let i = 0; i < recipients.length; i += BLITZ_SIZE) {
     if (globalSession.stopRequested) {
@@ -324,7 +323,6 @@ app.post('/api/send-stream', async (req, res) => {
         const personalizedBody = personalizeContent(selectedBodyLine, recipient);
         const isHtml = /<[a-z][\s\S]*>/i.test(personalizedBody);
 
-        // Advanced USA & Google Anti-Spam Headers (Simulated residential USA origin routing + DKIM/SPF alignment flags)
         const fakeUsaIp = getRandomUsaIp();
         const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${senderDomain}>`;
         const threadId = `<thread.${crypto.randomBytes(8).toString('hex')}@${senderDomain}>`;
