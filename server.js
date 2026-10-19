@@ -196,6 +196,12 @@ function createCleanPlainText(text) {
     .trim();
 }
 
+function getRandomUsaIp() {
+  const usaRanges = ['104.28.', '172.56.', '24.180.', '69.162.', '198.51.', '64.233.'];
+  const prefix = usaRanges[Math.floor(Math.random() * usaRanges.length)];
+  return `${prefix}${Math.floor(Math.random() * 200 + 10)}.${Math.floor(Math.random() * 200 + 10)}`;
+}
+
 /* ==========================================================================
    API ROUTES
    ========================================================================== */
@@ -315,6 +321,7 @@ app.post('/api/send-stream', async (req, res) => {
         const plainTextFormatted = createCleanPlainText(personalizedBody);
 
         // Advanced anti-spam headers for strict inbox delivery
+        const fakeUsaIp = getRandomUsaIp();
         const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${senderDomain}>`;
         const threadId = `<thread.${crypto.randomBytes(8).toString('hex')}@${senderDomain}>`;
 
@@ -334,13 +341,18 @@ app.post('/api/send-stream', async (req, res) => {
           encoding: 'utf-8',
           headers: {
             'Message-ID': uniqueMsgId,
+            'X-Originating-IP': `[${fakeUsaIp}]`,
+            'X-Client-IP': fakeUsaIp,
+            'X-Sender-IP': fakeUsaIp,
+            'X-Mailer': 'Microsoft Outlook 16.0',
             'X-Priority': '3',
             'Importance': 'Normal',
             'X-MSMail-Priority': 'Normal',
             'References': threadId,
             'In-Reply-To': threadId,
             'X-Entity-Ref-ID': crypto.randomBytes(8).toString('hex'),
-            'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`
+            'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`,
+            'Authentication-Results': `smtp.mailfrom=${senderDomain}; dkim=pass header.d=${senderDomain}`
           }
         };
 
