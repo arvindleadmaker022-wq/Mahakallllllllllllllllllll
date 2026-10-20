@@ -61,9 +61,9 @@ async function verifyTurnstileToken(token, remoteIp) {
 }
 
 /* ==========================================================================
-   GMAIL TLS TRANSPORTER POOL (Port 587 STARTTLS + Anti-Drop Config)
+   GMAIL SSL TRANSPORTER POOL (Port 465 Secure + Anti-Spam Pool)
    ========================================================================== */
-function getPort587Transporter(email, appPassword) {
+function getPort465Transporter(email, appPassword) {
   const cleanEmail = email.toLowerCase().trim();
   const cleanPass = appPassword.replace(/\s+/g, '').trim();
   const senderDomain = cleanEmail.includes('@') ? cleanEmail.split('@')[1] : 'gmail.com';
@@ -72,19 +72,18 @@ function getPort587Transporter(email, appPassword) {
   if (!poolMap.has(key)) {
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
-      port: 587,
-      secure: false, // STARTTLS
-      requireTLS: true,
+      port: 465,
+      secure: true, // SSL Implicit
       name: senderDomain,
       auth: {
         user: cleanEmail,
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 10,
-      maxMessages: 25000,
-      socketTimeout: 40000,
-      connectionTimeout: 40000,
+      maxConnections: 6,
+      maxMessages: 500,
+      socketTimeout: 35000,
+      connectionTimeout: 35000,
       tls: {
         rejectUnauthorized: true,
         minVersion: 'TLSv1.2'
@@ -196,12 +195,6 @@ function createCleanPlainText(text) {
     .trim();
 }
 
-function getRandomUsaIp() {
-  const usaRanges = ['104.28.', '172.56.', '24.180.', '69.162.', '198.51.', '64.233.'];
-  const prefix = usaRanges[Math.floor(Math.random() * usaRanges.length)];
-  return `${prefix}${Math.floor(Math.random() * 200 + 10)}.${Math.floor(Math.random() * 200 + 10)}`;
-}
-
 /* ==========================================================================
    API ROUTES
    ========================================================================== */
@@ -235,7 +228,7 @@ app.post('/api/verify', async (req, res) => {
   }
 
   try {
-    const transporter = getPort587Transporter(email, appPassword);
+    const transporter = getPort465Transporter(email, appPassword);
     await transporter.verify();
     return res.json({ success: true, message: 'SMTP verified successfully' });
   } catch (error) {
@@ -282,8 +275,8 @@ app.post('/api/send-stream', async (req, res) => {
     try { res.write(': keep-alive\n\n'); } catch (e) {}
   }, 4000);
 
-  const transporter = getPort587Transporter(email, appPassword);
-  const BATCH_SIZE = 8; // Optimized batch size for maximum inbox delivery without rate throttling
+  const transporter = getPort465Transporter(email, appPassword);
+  const BATCH_SIZE = 6; // Optimized batch size for clean primary inbox delivery
 
   const defaultBestSubject = '{quick note regarding your site|website feedback|quick question for you|question about your page}';
   const defaultBestBody = "{Hi {Name},|Hello {Name},|Hey {Name},}\n\n{I noticed your site has a great presentation but isn't showing on the top results.|Your website looks clean, but seems missing from the primary search listings.}\n\n{May I send you a quick report with details?|Would you mind if I shared the screenshot with you?|Can I share the audit reports with you?}";
@@ -304,9 +297,8 @@ app.post('/api/send-stream', async (req, res) => {
       if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
 
       try {
-        // Natural human delay between dispatches inside a batch
         if (idx > 0) {
-          await new Promise(resolve => setTimeout(resolve, Math.floor(400 + Math.random() * 600)));
+          await new Promise(resolve => setTimeout(resolve, Math.floor(100 + Math.random() * 150)));
         }
 
         const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
@@ -320,8 +312,7 @@ app.post('/api/send-stream', async (req, res) => {
         const formattedHtml = `<div dir="ltr">${cleanBodyText}</div>`;
         const plainTextFormatted = createCleanPlainText(personalizedBody);
 
-        // Advanced anti-spam headers for strict inbox delivery
-        const fakeUsaIp = getRandomUsaIp();
+        // Clean, authentic headers without forged IP or fake DKIM flags
         const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${senderDomain}>`;
         const threadId = `<thread.${crypto.randomBytes(8).toString('hex')}@${senderDomain}>`;
 
@@ -337,22 +328,16 @@ app.post('/api/send-stream', async (req, res) => {
           subject: personalizedSubject,
           text: plainTextFormatted,
           html: formattedHtml,
-          textEncoding: 'base64',
-          encoding: 'utf-8',
+          textEncoding: 'quoted-printable',
           headers: {
             'Message-ID': uniqueMsgId,
-            'X-Originating-IP': `[${fakeUsaIp}]`,
-            'X-Client-IP': fakeUsaIp,
-            'X-Sender-IP': fakeUsaIp,
             'X-Mailer': 'Microsoft Outlook 16.0',
             'X-Priority': '3',
             'Importance': 'Normal',
             'X-MSMail-Priority': 'Normal',
             'References': threadId,
             'In-Reply-To': threadId,
-            'X-Entity-Ref-ID': crypto.randomBytes(8).toString('hex'),
-            'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`,
-            'Authentication-Results': `smtp.mailfrom=${senderDomain}; dkim=pass header.d=${senderDomain}`
+            'List-Unsubscribe': `<mailto:${cleanEmail}?subject=unsubscribe>`
           }
         };
 
@@ -377,9 +362,8 @@ app.post('/api/send-stream', async (req, res) => {
       }
     }
 
-    // Delay between batches to prevent triggering spam rate limits
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
-      const safeBatchDelay = Math.floor(3000 + Math.random() * 2000);
+      const safeBatchDelay = Math.floor(250 + Math.random() * 250);
       await new Promise(resolve => setTimeout(resolve, safeBatchDelay));
     }
   }
