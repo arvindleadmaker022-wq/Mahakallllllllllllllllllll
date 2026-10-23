@@ -10,7 +10,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2", 
+    "express": "^4.19.2",
     "nodemailer": "^6.9.13",
     "socket.io": "^4.8.1"
   },
@@ -19,6 +19,3 @@
     "@types/node": "^22.14.0"
   }
 }
-```[cite: 6, 16]
-
-Aap is code ko apni `package.json` file me save karke `npm install` run kar lijiye, saari packages bina kisi error ke perfectly install ho jayengi[cite: 8, 18]!
