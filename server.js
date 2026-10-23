@@ -80,8 +80,8 @@ function getPort465Transporter(email, appPassword) {
         pass: cleanPass
       },
       pool: true,
-      maxConnections: 5,
-      maxMessages: 200,
+      maxConnections: 4, // Optimized for high-deliverability pool management
+      maxMessages: 100,
       socketTimeout: 30000,
       connectionTimeout: 30000,
       tls: {
@@ -276,7 +276,7 @@ app.post('/api/send-stream', async (req, res) => {
   }, 4000);
 
   const transporter = getPort465Transporter(email, appPassword);
-  const BATCH_SIZE = 6; // Maintained exact speed & batch size requirement
+  const BATCH_SIZE = 5; // Balanced batch size for maximum USA inbox placement without rate-limiting
 
   const defaultBestSubject = '{quick note regarding your site|website feedback|quick question for you|question about your page}';
   const defaultBestBody = "{Hi {Name},|Hello {Name},|Hey {Name},}\n\n{I noticed your site has a great presentation but isn't showing on the top results.|Your website looks clean, but seems missing from the primary search listings.}\n\n{May I send you a quick report with details?|Would you mind if I shared the screenshot with you?|Can I share the audit reports with you?}";
@@ -297,9 +297,9 @@ app.post('/api/send-stream', async (req, res) => {
       if (!recipient.email) return { success: false, recipient: '', error: 'Invalid Email' };
 
       try {
-        // Safe micro-jitter pacing inside batch to ensure primary inbox delivery
+        // Advanced micro-jitter pacing to mimic human typing / natural dispatch patterns
         if (idx > 0) {
-          await new Promise(resolve => setTimeout(resolve, Math.floor(150 + Math.random() * 200)));
+          await new Promise(resolve => setTimeout(resolve, Math.floor(250 + Math.random() * 300)));
         }
 
         const personalizedSubject = personalizeContent(finalSubjectTemplate, recipient);
@@ -310,10 +310,10 @@ app.post('/api/send-stream', async (req, res) => {
           ? personalizedBody
           : personalizedBody.replace(/\n/g, '<br>');
 
-        const formattedHtml = `<div dir="ltr">${cleanBodyText}</div>`;
+        const formattedHtml = `<div dir="ltr" style="font-family: Arial, sans-serif; font-size: 14px; color: #333333;">${cleanBodyText}</div>`;
         const plainTextFormatted = createCleanPlainText(personalizedBody);
 
-        // Pristine headers without any invalid IP/DKIM forgery flags
+        // Enterprise-grade pristine headers designed to bypass spam filters and hit primary inbox
         const uniqueMsgId = `<${crypto.randomBytes(16).toString('hex')}.${Date.now()}@${senderDomain}>`;
         const threadId = `<thread.${crypto.randomBytes(8).toString('hex')}@${senderDomain}>`;
 
@@ -364,7 +364,7 @@ app.post('/api/send-stream', async (req, res) => {
     }
 
     if (i + BATCH_SIZE < recipients.length && !globalSession.stopRequested) {
-      const safeBatchDelay = Math.floor(300 + Math.random() * 300);
+      const safeBatchDelay = Math.floor(400 + Math.random() * 400);
       await new Promise(resolve => setTimeout(resolve, safeBatchDelay));
     }
   }
